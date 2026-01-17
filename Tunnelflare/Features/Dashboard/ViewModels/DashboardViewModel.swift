@@ -70,10 +70,7 @@ final class DashboardViewModel {
         defer { isLoading = false }
 
         do {
-            // TODO: Connect to API client to load tunnels
-            // For now, this is a placeholder
-            try await Task.sleep(for: .milliseconds(500))
-
+            await appState?.refreshAllTunnels()
             hasLoadedInitialData = true
             error = nil
         } catch {
@@ -94,10 +91,7 @@ final class DashboardViewModel {
         }
 
         do {
-            // TODO: Connect to API client to refresh tunnels
-            try await Task.sleep(for: .milliseconds(500))
-
-            appState?.lastTunnelSync = Date()
+            await appState?.refreshAllTunnels()
             error = nil
         } catch {
             self.error = error
