@@ -108,11 +108,7 @@ final class SettingsViewModel {
         set { settingsManager.logDisplayMode = newValue }
     }
 
-    /// Whether to persist logs to files.
-    var persistLogsToFile: Bool {
-        get { settingsManager.persistLogsToFile }
-        set { settingsManager.persistLogsToFile = newValue }
-    }
+    // Note: persistLogsToFile removed - logs are always persisted per-tunnel now
 
     // MARK: - Version Information
 

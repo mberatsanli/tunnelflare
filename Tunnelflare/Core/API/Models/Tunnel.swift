@@ -76,6 +76,16 @@ struct Tunnel: Codable, Identifiable, Hashable, Sendable {
         connections.count
     }
 
+    /// The number of connectors (cloudflared instances).
+    var connectorCount: Int {
+        groupedConnectors.count
+    }
+
+    /// Connections grouped by connector (clientId).
+    var groupedConnectors: [GroupedConnector] {
+        GroupedConnector.group(from: connections)
+    }
+
     /// Whether this tunnel has any connections.
     var hasConnections: Bool {
         !connections.isEmpty

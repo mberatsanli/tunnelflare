@@ -41,8 +41,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Log system information
         logSystemInfo()
 
+        // Perform storage migration if needed (one-time, from shared to per-tunnel storage)
+        performStorageMigration()
+
         // Note: Notification authorization is now handled by NotificationService
         // which is initialized via ServiceContainer
+    }
+
+    /// Performs one-time migration to per-tunnel storage structure.
+    private func performStorageMigration() {
+        Task {
+            await TunnelStorageManager.shared.performMigrationIfNeeded()
+        }
     }
 
     /// Called before the application terminates.

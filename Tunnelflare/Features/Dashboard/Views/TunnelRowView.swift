@@ -33,9 +33,13 @@ struct TunnelRowView: View {
     /// Called when the toggle button is pressed.
     let onToggle: () -> Void
 
+    /// Called when delete is requested.
+    let onDelete: (() -> Void)?
+
     // MARK: - State
 
     @State private var isHovered = false
+    @State private var serviceURL: String?
 
     // MARK: - Body
 
@@ -89,10 +93,41 @@ struct TunnelRowView: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        .contextMenu {
+            // View Details
+            Button(action: onSelect) {
+                Label("View Details", systemImage: "info.circle")
+            }
+
+            Divider()
+
+            // Start/Stop toggle
+            if canToggle {
+                Button(action: onToggle) {
+                    Label(isRunningLocally ? "Stop Tunnel" : "Start Tunnel",
+                          systemImage: isRunningLocally ? "stop.fill" : "play.fill")
+                }
+                .disabled(isTransitioning)
+            }
+
+            Divider()
+
+            // Delete option
+            if let onDelete = onDelete {
+                Button(role: .destructive, action: onDelete) {
+                    Label("Delete Tunnel", systemImage: "trash")
+                }
+                .disabled(isRunningLocally || isTransitioning || tunnel.isActive)
+            }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityDescription)
         .accessibilityHint("Double tap to view tunnel details")
         .accessibilityAddTraits(.isButton)
+        .task {
+            // Load service URL from cached config
+            serviceURL = await TunnelStorageManager.shared.primaryServiceURL(for: tunnel.id)
+        }
     }
 
     // MARK: - Accessibility
@@ -108,7 +143,7 @@ struct TunnelRowView: View {
         }
 
         if tunnel.hasConnections {
-            description += "\(tunnel.activeConnectionCount) active connector\(tunnel.activeConnectionCount == 1 ? "" : "s"). "
+            description += "\(tunnel.connectorCount) active connector\(tunnel.connectorCount == 1 ? "" : "s"). "
         }
 
         return description
@@ -135,7 +170,7 @@ struct TunnelRowView: View {
                 .foregroundStyle(statusTextColor)
 
             if tunnel.hasConnections {
-                Text("\(tunnel.activeConnectionCount) connector\(tunnel.activeConnectionCount == 1 ? "" : "s")")
+                Text("\(tunnel.connectorCount) connector\(tunnel.connectorCount == 1 ? "" : "s")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -265,9 +300,7 @@ struct TunnelRowView: View {
     }
 
     private var primaryService: String? {
-        // Would come from ingress rules in real implementation
-        // For now, return nil or a placeholder
-        nil
+        serviceURL
     }
 
     private var serviceIcon: String {
@@ -321,7 +354,8 @@ struct BadgeView: View {
             tunnel: .preview,
             localState: .running(pid: 1234, startedAt: Date().addingTimeInterval(-3600)),
             onSelect: { },
-            onToggle: { }
+            onToggle: { },
+            onDelete: { }
         )
 
         Divider()
@@ -330,7 +364,8 @@ struct BadgeView: View {
             tunnel: .inactivePreview,
             localState: nil,
             onSelect: { },
-            onToggle: { }
+            onToggle: { },
+            onDelete: { }
         )
 
         Divider()
@@ -339,7 +374,8 @@ struct BadgeView: View {
             tunnel: .preview,
             localState: .starting,
             onSelect: { },
-            onToggle: { }
+            onToggle: { },
+            onDelete: { }
         )
     }
     .frame(width: 700)

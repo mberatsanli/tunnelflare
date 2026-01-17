@@ -214,7 +214,7 @@ enum LogExporter {
         var lines: [String] = []
 
         // Header
-        lines.append("# Cloudflare Tunnel UI - Log Export")
+        lines.append("# Tunnelflare - Log Export")
         if let name = tunnelName {
             lines.append("# Tunnel: \(name)")
         }

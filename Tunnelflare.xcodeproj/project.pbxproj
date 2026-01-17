@@ -79,6 +79,8 @@
 		30E87D2971638C8E18BDFEC0 /* LogFileWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD1C3B54D244B6331A167602 /* LogFileWriter.swift */; };
 		54D14025B60F02BC45EE2F3E /* Zone.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A04D1E88EA3762C09EF113 /* Zone.swift */; };
 		D73C4D1887E2BBB7F078A17F /* ZoneEndpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE147E8B8AA1F8F7D16B6D7 /* ZoneEndpoints.swift */; };
+		STORAGE001000001 /* TunnelStorageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = STORAGE002000001 /* TunnelStorageManager.swift */; };
+		STORAGE001000003 /* TunnelDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = STORAGE002000003 /* TunnelDatabase.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -166,6 +168,8 @@
 		5DE147E8B8AA1F8F7D16B6D7 /* ZoneEndpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ZoneEndpoints.swift; path = Tunnelflare/Core/API/Endpoints/ZoneEndpoints.swift; sourceTree = SOURCE_ROOT; };
 		B7A04D1E88EA3762C09EF113 /* Zone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Zone.swift; path = Tunnelflare/Core/API/Models/Zone.swift; sourceTree = SOURCE_ROOT; };
 		BD1C3B54D244B6331A167602 /* LogFileWriter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LogFileWriter.swift; sourceTree = "<group>"; };
+		STORAGE002000001 /* TunnelStorageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelStorageManager.swift; sourceTree = "<group>"; };
+		STORAGE002000003 /* TunnelDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelDatabase.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -189,15 +193,15 @@
 		5000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				5000000000000002 /*/* Tunnelflare */,
-				5100000000000001 /*/* TunnelflareTests */,
+				5000000000000002 /* Tunnelflare */,
+				5100000000000001 /* TunnelflareTests */,
 				5000000000000003 /* Products */,
 				B7A04D1E88EA3762C09EF113 /* Zone.swift */,
 				5DE147E8B8AA1F8F7D16B6D7 /* ZoneEndpoints.swift */,
 			);
 			sourceTree = "<group>";
 		};
-		5000000000000002 /*/* Tunnelflare */ = {
+		5000000000000002 /* Tunnelflare */ = {
 			isa = PBXGroup;
 			children = (
 				5000000000000010 /* App */,
@@ -238,8 +242,18 @@
 				5000000000000023 /* Process */,
 				5000000000000024 /* Logs */,
 				5000000000000025 /* Notifications */,
+				STORAGE003000001 /* Storage */,
 			);
 			path = Core;
+			sourceTree = "<group>";
+		};
+		STORAGE003000001 /* Storage */ = {
+			isa = PBXGroup;
+			children = (
+				STORAGE002000001 /* TunnelStorageManager.swift */,
+				STORAGE002000003 /* TunnelDatabase.swift */,
+			);
+			path = Storage;
 			sourceTree = "<group>";
 		};
 		5000000000000021 /* API */ = {
@@ -526,7 +540,7 @@
 			path = ViewModels;
 			sourceTree = "<group>";
 		};
-		5100000000000001 /*/* TunnelflareTests */ = {
+		5100000000000001 /* TunnelflareTests */ = {
 			isa = PBXGroup;
 			children = (
 				2100000000000001 /* TestHelpers.swift */,
@@ -549,7 +563,7 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		6000000000000001 /*/* Tunnelflare */ = {
+		6000000000000001 /* Tunnelflare */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 7000000000000003 /* Build configuration list for PBXNativeTarget "Tunnelflare" */;
 			buildPhases = (
@@ -566,7 +580,7 @@
 			productReference = 3000000000000001 /* Tunnelflare.app */;
 			productType = "com.apple.product-type.application";
 		};
-		6000000000000010 /*/* TunnelflareTests */ = {
+		6000000000000010 /* TunnelflareTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 7000000000000004 /* Build configuration list for PBXNativeTarget "TunnelflareTests" */;
 			buildPhases = (
@@ -616,8 +630,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				6000000000000001 /*/* Tunnelflare */,
-				6000000000000010 /*/* TunnelflareTests */,
+				6000000000000001 /* Tunnelflare */,
+				6000000000000010 /* TunnelflareTests */,
 			);
 		};
 /* End PBXProject section */
@@ -709,6 +723,8 @@
 				134F48F3ABA0C8986337B315 /* Zone.swift in Sources */,
 				1CC54B5B8B0470B7820EE151 /* ZoneEndpoints.swift in Sources */,
 				30E87D2971638C8E18BDFEC0 /* LogFileWriter.swift in Sources */,
+				STORAGE001000001 /* TunnelStorageManager.swift in Sources */,
+				STORAGE001000003 /* TunnelDatabase.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -731,7 +747,7 @@
 /* Begin PBXTargetDependency section */
 		A000000000000002 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 6000000000000001 /*/* Tunnelflare */;
+			target = 6000000000000001 /* Tunnelflare */;
 			targetProxy = A000000000000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -872,7 +888,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Tunnelflare/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Tunnelflare";
+				INFOPLIST_KEY_CFBundleDisplayName = Tunnelflare;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright 2026. All rights reserved.";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -884,7 +900,7 @@
 					"$(SRCROOT)/Tunnelflare/Core/API/Endpoints",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.tunnelflare";
+				PRODUCT_BUNDLE_IDENTIFIER = com.tunnelflare;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -906,7 +922,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Tunnelflare/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Tunnelflare";
+				INFOPLIST_KEY_CFBundleDisplayName = Tunnelflare;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright 2026. All rights reserved.";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -918,7 +934,7 @@
 					"$(SRCROOT)/Tunnelflare/Core/API/Endpoints",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.tunnelflare";
+				PRODUCT_BUNDLE_IDENTIFIER = com.tunnelflare;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -939,7 +955,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.tunnelflare.tests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.tunnelflare.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
@@ -961,7 +977,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.tunnelflare.tests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.tunnelflare.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;

@@ -52,12 +52,79 @@ struct TunnelDetailView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             viewModel.setup(tunnel: tunnel, appState: appState)
+            viewModel.onTunnelDeleted = onBack
         }
         .task {
             await viewModel.loadConfiguration()
         }
         .onChange(of: appState.localTunnelStates[tunnel.id]) { _, _ in
             viewModel.updateLocalState()
+        }
+        // Delete confirmation dialog
+        .alert(
+            "Delete Tunnel?",
+            isPresented: $viewModel.showDeleteConfirmation
+        ) {
+            Button("Cancel", role: .cancel) {
+                viewModel.cancelDeleteTunnel()
+            }
+            Button("Delete", role: .destructive) {
+                Task {
+                    await viewModel.confirmDeleteTunnel()
+                }
+            }
+        } message: {
+            Text("Are you sure you want to delete \"\(tunnel.name)\"? This will also remove associated DNS records. This action cannot be undone.")
+        }
+        // Deletion error alert
+        .alert(
+            "Deletion Failed",
+            isPresented: $viewModel.showDeletionError
+        ) {
+            Button("OK") {
+                viewModel.dismissDeletionError()
+            }
+        } message: {
+            if let error = viewModel.deletionError {
+                Text(error)
+            }
+        }
+        // Cleanup confirmation dialog
+        .alert(
+            "Clean Up Connections?",
+            isPresented: $viewModel.showCleanupConfirmation
+        ) {
+            Button("Cancel", role: .cancel) {
+                viewModel.cancelCleanupConnections()
+            }
+            Button("Clean Up", role: .destructive) {
+                Task {
+                    await viewModel.confirmCleanupConnections()
+                }
+            }
+        } message: {
+            Text("This will remove all stale connections and refresh the tunnel status. Active connections may also be affected.")
+        }
+        // Cleanup error alert
+        .alert(
+            "Cleanup Failed",
+            isPresented: $viewModel.showCleanupError
+        ) {
+            Button("OK") {
+                viewModel.dismissCleanupError()
+            }
+        } message: {
+            if let error = viewModel.cleanupError {
+                Text(error)
+            }
+        }
+        // Deletion progress sheet
+        .sheet(isPresented: $viewModel.isDeletingTunnel) {
+            DeletionProgressView(
+                tunnelName: tunnel.name,
+                step: viewModel.deletionStep
+            )
+            .interactiveDismissDisabled()
         }
     }
 
@@ -94,6 +161,19 @@ struct TunnelDetailView: View {
                         )
                     }
 
+                    // Service URL and last connected time
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let hostname = viewModel.publicHostname {
+                            Label("https://\(hostname)", systemImage: "globe")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Label(viewModel.lastConnectedText, systemImage: "clock")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+
                     HStack(spacing: 8) {
                         if viewModel.isRemote {
                             Label("Running on another machine", systemImage: "desktopcomputer")
@@ -124,16 +204,15 @@ struct TunnelDetailView: View {
 
     private var controlButtons: some View {
         HStack(spacing: 8) {
-            // Visit button (if has public hostname)
-            if let hostname = viewModel.publicHostname {
-                Button(action: {
-                    viewModel.visitHostname()
-                }) {
-                    Label("Visit", systemImage: "safari")
-                }
-                .buttonStyle(.bordered)
-                .help("Open https://\(hostname) in browser")
+            // Visit button (always visible, disabled if no hostname)
+            Button(action: {
+                viewModel.visitHostname()
+            }) {
+                Label("Visit", systemImage: "safari")
             }
+            .buttonStyle(.bordered)
+            .disabled(viewModel.publicHostname == nil)
+            .help(viewModel.publicHostname.map { "Open https://\($0) in browser" } ?? "No public hostname configured")
 
             if viewModel.isRunningLocally {
                 // Stop button
@@ -164,8 +243,41 @@ struct TunnelDetailView: View {
                 .tint(.orange)
                 .disabled(viewModel.controlsDisabled)
             }
+
+            Divider()
+                .frame(height: 20)
+
+            // Delete button
+            Button(role: .destructive, action: {
+                viewModel.requestDeleteTunnel()
+            }) {
+                Label("Delete", systemImage: "trash")
+            }
+            .buttonStyle(.bordered)
+            .disabled(!viewModel.canDelete)
+            .help(deleteButtonHelp)
+            .accessibilityLabel("Delete tunnel")
+            .accessibilityHint(deleteButtonAccessibilityHint)
         }
-        .disabled(viewModel.isPerformingAction)
+        .disabled(viewModel.isPerformingAction || viewModel.isDeletingTunnel)
+    }
+
+    /// Help text for the delete button based on tunnel state.
+    private var deleteButtonHelp: String {
+        if viewModel.isRunningLocally {
+            return "Stop tunnel before deleting"
+        } else if viewModel.isRemote || (viewModel.tunnel?.isActive ?? false) {
+            return "Tunnel is running remotely. Stop it before deleting."
+        }
+        return "Delete this tunnel"
+    }
+
+    /// Accessibility hint for the delete button.
+    private var deleteButtonAccessibilityHint: String {
+        if viewModel.isRunningLocally || viewModel.isRemote || (viewModel.tunnel?.isActive ?? false) {
+            return "Stop the tunnel first to enable deletion"
+        }
+        return "Deletes this tunnel and its DNS records"
     }
 
     // MARK: - Tab Content
@@ -219,20 +331,75 @@ struct TunnelDetailView: View {
                 }
 
                 // Connectors
-                DetailSection(title: "Connectors") {
-                    if tunnel.connections.isEmpty {
-                        Text("No active connectors")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        VStack(spacing: 12) {
-                            ForEach(tunnel.connections) { connection in
-                                ConnectorRow(connection: connection)
+                connectorsSection
+            }
+            .padding()
+        }
+    }
+
+    // MARK: - Connectors Section
+
+    private var connectorsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Section header with cleanup button
+            HStack {
+                Text("Connectors")
+                    .font(.headline)
+
+                if !tunnel.groupedConnectors.isEmpty {
+                    Text("(\(tunnel.connectorCount))")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                // Cleanup button in header
+                if !tunnel.connections.isEmpty {
+                    Button(action: {
+                        viewModel.requestCleanupConnections()
+                    }) {
+                        HStack(spacing: 4) {
+                            if viewModel.isCleaningUpConnections {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "arrow.triangle.2.circlepath")
                             }
+                            Text("Clean Up")
                         }
+                        .font(.subheadline)
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(viewModel.isCleaningUpConnections)
+                    .help("Remove stale connections and refresh tunnel status")
+                }
+            }
+
+            // Content
+            if tunnel.groupedConnectors.isEmpty {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 8) {
+                        Image(systemName: "network.slash")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                        Text("No active connectors")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 20)
+                    Spacer()
+                }
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(tunnel.groupedConnectors) { connector in
+                        ConnectorRow(connector: connector)
                     }
                 }
             }
-            .padding()
         }
     }
 
@@ -911,39 +1078,130 @@ struct DetailRow<Content: View>: View {
     }
 }
 
-/// A row displaying connector information.
+/// A row displaying grouped connector information.
 struct ConnectorRow: View {
+    let connector: GroupedConnector
+
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Main connector row
+            Button(action: { isExpanded.toggle() }) {
+                HStack(spacing: 12) {
+                    StatusIndicator(status: connector.isHealthy ? .connected : .error, size: .small)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text("Connector")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+
+                            // Data centers badges
+                            ForEach(connector.datacenters, id: \.self) { dc in
+                                BadgeView(text: dc, color: .blue)
+                            }
+
+                            if let originIp = connector.originIp {
+                                Text(originIp)
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.secondary.opacity(0.1))
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                            }
+                        }
+
+                        HStack(spacing: 12) {
+                            Text(connector.connectorInfo)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Text("\(connector.connections.count) connection\(connector.connections.count == 1 ? "" : "s")")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+
+                            Text("Connected \(connector.formattedDuration) ago")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+
+                    Spacer()
+
+                    // Expand/collapse indicator
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            // Expanded connection details
+            if isExpanded {
+                VStack(spacing: 0) {
+                    Divider()
+                        .padding(.leading, 40)
+
+                    ForEach(connector.connections) { connection in
+                        ConnectionDetailRow(connection: connection)
+                    }
+                }
+                .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+            }
+        }
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .contextMenu {
+            Button(action: {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(connector.id, forType: .string)
+            }) {
+                Label("Copy Connector ID", systemImage: "doc.on.doc")
+            }
+        }
+    }
+}
+
+/// A row displaying individual connection details within a connector.
+struct ConnectionDetailRow: View {
     let connection: Connection
 
     var body: some View {
         HStack(spacing: 12) {
-            StatusIndicator(status: connection.isHealthy ? .connected : .error, size: .small)
+            Circle()
+                .fill(connection.isHealthy ? Color.green : Color.orange)
+                .frame(width: 6, height: 6)
+                .padding(.leading, 40)
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text("Connector")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+            Text(connection.coloName)
+                .font(.caption)
+                .fontWeight(.medium)
+                .frame(width: 40, alignment: .leading)
 
-                    BadgeView(text: connection.coloName, color: .blue)
-                }
-
-                HStack(spacing: 12) {
-                    Text(connection.connectorInfo)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text("Connected \(connection.formattedDuration) ago")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
+            if connection.isPendingReconnect {
+                BadgeView(text: "Reconnecting", color: .orange)
             }
 
             Spacer()
+
+            Text(connection.formattedOpenedAt)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .padding(.vertical, 6)
+        .padding(.trailing)
+        .contextMenu {
+            Button(action: {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(connection.uuid, forType: .string)
+            }) {
+                Label("Copy Connection ID", systemImage: "doc.on.doc")
+            }
+        }
     }
 }
 

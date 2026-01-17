@@ -154,6 +154,107 @@ extension Connection: Comparable {
     }
 }
 
+// MARK: - Grouped Connector
+
+/// Represents a cloudflared connector with its connections grouped together.
+///
+/// A single cloudflared instance (connector) typically creates 4 connections
+/// to different Cloudflare edge data centers for high availability.
+/// This struct groups those connections for display purposes.
+struct GroupedConnector: Identifiable, Hashable {
+    /// The unique identifier for this connector (clientId).
+    let id: String
+
+    /// The version of cloudflared.
+    let version: String?
+
+    /// The architecture of the connector.
+    let arch: String?
+
+    /// The origin IP of the connector.
+    let originIp: String?
+
+    /// Individual connections from this connector.
+    let connections: [Connection]
+
+    /// When this connector was first connected (earliest connection).
+    var connectedAt: Date {
+        connections.map(\.openedAt).min() ?? Date()
+    }
+
+    /// The data centers this connector is connected to.
+    var datacenters: [String] {
+        connections.map(\.coloName).sorted()
+    }
+
+    /// Comma-separated list of data centers.
+    var datacentersList: String {
+        datacenters.joined(separator: ", ")
+    }
+
+    /// Number of healthy connections.
+    var healthyConnectionCount: Int {
+        connections.filter(\.isHealthy).count
+    }
+
+    /// Whether all connections are healthy.
+    var isHealthy: Bool {
+        connections.allSatisfy(\.isHealthy)
+    }
+
+    /// Whether some connections are pending reconnect.
+    var hasPendingConnections: Bool {
+        connections.contains { $0.isPendingReconnect }
+    }
+
+    /// Combined version and architecture info.
+    var connectorInfo: String {
+        if let version = version, let arch = arch {
+            return "\(version) (\(arch))"
+        } else if let version = version {
+            return version
+        }
+        return "Unknown version"
+    }
+
+    /// Connection duration from when first connected.
+    var formattedDuration: String {
+        let duration = Date().timeIntervalSince(connectedAt)
+
+        if duration < 60 {
+            return "Just now"
+        } else if duration < 3600 {
+            let minutes = Int(duration / 60)
+            return "\(minutes) min\(minutes == 1 ? "" : "s")"
+        } else if duration < 86400 {
+            let hours = Int(duration / 3600)
+            return "\(hours) hour\(hours == 1 ? "" : "s")"
+        } else {
+            let days = Int(duration / 86400)
+            return "\(days) day\(days == 1 ? "" : "s")"
+        }
+    }
+
+    /// Creates grouped connectors from a list of connections.
+    static func group(from connections: [Connection]) -> [GroupedConnector] {
+        // Group by clientId (or uuid if clientId is nil)
+        let grouped = Dictionary(grouping: connections) { connection in
+            connection.clientId ?? connection.uuid
+        }
+
+        return grouped.map { (clientId, connections) in
+            let first = connections.first
+            return GroupedConnector(
+                id: clientId,
+                version: first?.clientVersion,
+                arch: first?.arch,
+                originIp: first?.originIp,
+                connections: connections.sorted { $0.openedAt < $1.openedAt }
+            )
+        }.sorted { $0.connectedAt < $1.connectedAt }
+    }
+}
+
 // MARK: - Connector
 
 /// Represents a cloudflared connector (used in some API responses).

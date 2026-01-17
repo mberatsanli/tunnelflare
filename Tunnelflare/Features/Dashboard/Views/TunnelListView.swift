@@ -56,9 +56,53 @@ struct TunnelListView: View {
             if !viewModel.hasLoaded {
                 await viewModel.loadTunnels()
             }
+            // Start auto-refresh when tunnel list is loaded
+            appState.startAutoRefresh()
+        }
+        .onDisappear {
+            // Stop auto-refresh when leaving tunnel list
+            appState.stopAutoRefresh()
         }
         .onChange(of: appState.tunnels) { _, _ in
             // Update when tunnels change
+        }
+        // Delete confirmation dialog
+        .alert(
+            "Delete Tunnel?",
+            isPresented: $viewModel.showDeleteConfirmation,
+            presenting: viewModel.tunnelToDelete
+        ) { tunnel in
+            Button("Cancel", role: .cancel) {
+                viewModel.cancelDeleteTunnel()
+            }
+            Button("Delete", role: .destructive) {
+                Task {
+                    await viewModel.confirmDeleteTunnel()
+                }
+            }
+        } message: { tunnel in
+            Text("Are you sure you want to delete \"\(tunnel.name)\"? This will also remove associated DNS records. This action cannot be undone.")
+        }
+        // Deletion error alert
+        .alert(
+            "Deletion Failed",
+            isPresented: $viewModel.showDeletionError
+        ) {
+            Button("OK") {
+                viewModel.dismissDeletionError()
+            }
+        } message: {
+            if let error = viewModel.deletionError {
+                Text(error)
+            }
+        }
+        // Deletion progress sheet
+        .sheet(isPresented: $viewModel.isDeletingTunnel) {
+            DeletionProgressView(
+                tunnelName: viewModel.tunnelToDelete?.name ?? "Tunnel",
+                step: viewModel.deletionStep
+            )
+            .interactiveDismissDisabled()
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Tunnel List")
@@ -147,10 +191,29 @@ struct TunnelListView: View {
                 }
             }
 
-            // Last sync info
-            if let lastSync = appState.lastTunnelSync {
-                HStack {
-                    Spacer()
+            // Last sync info with auto-refresh indicator
+            HStack(spacing: 6) {
+                Spacer()
+
+                // Auto-refresh indicator
+                if appState.isAutoRefreshEnabled {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 6, height: 6)
+                        Text("Auto-refresh")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .help("Auto-refreshing every \(Int(appState.autoRefreshInterval)) seconds")
+                }
+
+                if let lastSync = appState.lastTunnelSync {
+                    if appState.isAutoRefreshEnabled {
+                        Text("•")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
                     Text("Updated \(lastSync, style: .relative)")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
@@ -281,6 +344,9 @@ struct TunnelListView: View {
                             Task {
                                 await viewModel.toggleTunnel(tunnel)
                             }
+                        },
+                        onDelete: {
+                            viewModel.requestDeleteTunnel(tunnel)
                         }
                     )
                     .transition(.asymmetric(
@@ -358,4 +424,148 @@ struct TunnelListView: View {
     )
     .environment(appState)
     .frame(width: 700, height: 500)
+}
+
+// MARK: - Deletion Progress View
+
+/// A sheet view showing deletion progress with animated steps.
+struct DeletionProgressView: View {
+    let tunnelName: String
+    let step: DeletionStep
+
+    private let allSteps: [DeletionStep] = [
+        .preparing,
+        .deletingDNS,
+        .deletingFromCloudflare,
+        .cleaningUp,
+        .completed
+    ]
+
+    var body: some View {
+        VStack(spacing: 24) {
+            // Header
+            VStack(spacing: 8) {
+                Image(systemName: step.isFailed ? "xmark.circle.fill" : "trash.circle.fill")
+                    .font(.system(size: 48))
+                    .foregroundStyle(step.isFailed ? .red : .orange)
+                    .symbolEffect(.pulse, isActive: !step.isCompleted && !step.isFailed)
+
+                Text(step.isFailed ? "Deletion Failed" : "Deleting Tunnel")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+
+                Text(tunnelName)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            // Progress steps
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(Array(allSteps.enumerated()), id: \.offset) { index, displayStep in
+                    DeletionStepRow(
+                        step: displayStep,
+                        currentStep: step,
+                        stepIndex: index,
+                        currentIndex: currentStepIndex
+                    )
+                }
+            }
+            .padding(.horizontal)
+
+            // Error message
+            if case .failed(let error) = step {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+        }
+        .padding(32)
+        .frame(width: 320)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var currentStepIndex: Int {
+        switch step {
+        case .preparing: return 0
+        case .stoppingTunnel: return 0
+        case .deletingDNS: return 1
+        case .deletingFromCloudflare: return 2
+        case .cleaningUp: return 3
+        case .completed: return 4
+        case .failed: return -1
+        }
+    }
+}
+
+/// A single step row in the deletion progress.
+struct DeletionStepRow: View {
+    let step: DeletionStep
+    let currentStep: DeletionStep
+    let stepIndex: Int
+    let currentIndex: Int
+
+    private var state: StepState {
+        if currentStep.isFailed {
+            return stepIndex <= currentIndex ? .failed : .pending
+        } else if stepIndex < currentIndex {
+            return .completed
+        } else if stepIndex == currentIndex {
+            return .inProgress
+        } else {
+            return .pending
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Status icon
+            ZStack {
+                Circle()
+                    .fill(state.backgroundColor)
+                    .frame(width: 24, height: 24)
+
+                Group {
+                    switch state {
+                    case .completed:
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                    case .inProgress:
+                        ProgressView()
+                            .scaleEffect(0.6)
+                    case .failed:
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                    case .pending:
+                        Circle()
+                            .fill(Color.secondary.opacity(0.3))
+                            .frame(width: 8, height: 8)
+                    }
+                }
+            }
+
+            // Step title
+            Text(step.title.replacingOccurrences(of: "...", with: ""))
+                .font(.subheadline)
+                .foregroundStyle(state == .pending ? .secondary : .primary)
+
+            Spacer()
+        }
+    }
+
+    enum StepState {
+        case pending, inProgress, completed, failed
+
+        var backgroundColor: Color {
+            switch self {
+            case .pending: return Color.secondary.opacity(0.2)
+            case .inProgress: return Color.orange.opacity(0.2)
+            case .completed: return Color.green
+            case .failed: return Color.red
+            }
+        }
+    }
 }

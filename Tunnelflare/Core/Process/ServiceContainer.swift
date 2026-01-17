@@ -64,6 +64,9 @@ actor ServiceContainer {
     /// Application settings reference.
     private var settings: AppSettings
 
+    /// API client for tunnel operations.
+    private let apiClient: CloudflareAPIClient
+
     /// Logger for service container operations.
     private let logger = Logger.app
 
@@ -116,6 +119,9 @@ actor ServiceContainer {
 
         // Store settings
         self.settings = settings
+
+        // Store API client
+        self.apiClient = apiClient
     }
 
     /// Creates a ServiceContainer asynchronously.
@@ -231,13 +237,11 @@ actor ServiceContainer {
         // Register for auto-reconnect
         await autoReconnectService.registerTunnel(tunnelId: tunnelId, accountId: accountId)
 
-        // Start log file if persistence is enabled
-        if settings.persistLogsToFile {
-            do {
-                try await logFileWriter.startLogging(tunnelId: tunnelId)
-            } catch {
-                logger.error("Failed to start log file for tunnel \(tunnelId): \(error.localizedDescription)")
-            }
+        // Start log file (always persisted per-tunnel)
+        do {
+            try await logFileWriter.startLogging(tunnelId: tunnelId)
+        } catch {
+            logger.error("Failed to start log file for tunnel \(tunnelId): \(error.localizedDescription)")
         }
 
         // Start the tunnel
@@ -274,6 +278,81 @@ actor ServiceContainer {
     /// Stops all running tunnels.
     func stopAllTunnels() async {
         await processManager.stopAllTunnels()
+    }
+
+    /// Deletes a tunnel completely, including DNS records, local storage, and API deletion.
+    ///
+    /// This method:
+    /// 1. Stops the tunnel if running
+    /// 2. Deletes DNS records associated with the tunnel
+    /// 3. Deletes from Cloudflare API
+    /// 4. Removes token from Keychain
+    /// 5. Deletes local storage (config cache + logs)
+    /// 6. Deletes from database
+    /// 7. Unregisters tunnel name
+    ///
+    /// - Parameters:
+    ///   - tunnelId: The tunnel ID to delete.
+    ///   - accountId: The account ID.
+    /// - Returns: The result of the deletion including DNS cleanup status.
+    /// - Throws: `APIError` if the API deletion fails.
+    @discardableResult
+    func deleteTunnel(tunnelId: String, accountId: String) async throws -> TunnelDeletionResult {
+        logger.info("Deleting tunnel: \(tunnelId)")
+
+        var dnsResult: DNSDeletionResult?
+
+        // 1. Stop the tunnel if running
+        await stopTunnel(tunnelId: tunnelId)
+
+        // 2. Delete DNS records (don't throw on failure)
+        logger.info("Deleting DNS records for tunnel: \(tunnelId)")
+        dnsResult = await apiClient.deleteDNSRecordsForTunnel(accountId: accountId, tunnelId: tunnelId)
+        if dnsResult?.hasDeleted == true {
+            logger.info("Deleted DNS records: \(dnsResult?.deletedHostnames.joined(separator: ", ") ?? "")")
+        }
+        if let errors = dnsResult?.errors, !errors.isEmpty {
+            for error in errors {
+                logger.warning("DNS deletion warning: \(error)")
+            }
+        }
+
+        // 3. Delete from Cloudflare API
+        try await apiClient.deleteTunnel(accountId: accountId, tunnelId: tunnelId)
+
+        // 4. Remove token from Keychain (don't throw on failure)
+        do {
+            try await KeychainManager.shared.deleteTunnelToken(for: tunnelId)
+            logger.info("Deleted Keychain token for tunnel: \(tunnelId)")
+        } catch {
+            logger.warning("Failed to delete Keychain token for tunnel \(tunnelId): \(error.localizedDescription)")
+        }
+
+        // 5. Delete local storage (don't throw on failure)
+        do {
+            try await TunnelStorageManager.shared.deleteTunnelData(for: tunnelId)
+            logger.info("Deleted local storage for tunnel: \(tunnelId)")
+        } catch {
+            logger.warning("Failed to delete local storage for tunnel \(tunnelId): \(error.localizedDescription)")
+        }
+
+        // 6. Delete from database (don't throw on failure)
+        do {
+            try await TunnelDatabase.shared.deleteTunnel(id: tunnelId)
+            logger.info("Deleted database record for tunnel: \(tunnelId)")
+        } catch {
+            logger.warning("Failed to delete database record for tunnel \(tunnelId): \(error.localizedDescription)")
+        }
+
+        // 7. Unregister tunnel name
+        unregisterTunnelName(tunnelId: tunnelId)
+
+        logger.info("Tunnel deleted successfully: \(tunnelId)")
+
+        return TunnelDeletionResult(
+            tunnelId: tunnelId,
+            dnsResult: dnsResult
+        )
     }
 
     // MARK: - Tunnel Name Registration
@@ -375,10 +454,8 @@ actor ServiceContainer {
                     // Process log for in-memory storage
                     await logStreamManager.processLogLine(line, tunnelId: tunnelId)
 
-                    // Write to file if persistence is enabled
-                    if settings.persistLogsToFile {
-                        await logFileWriter.writeRawLog(tunnelId: tunnelId, line: line)
-                    }
+                    // Write to file (always persisted per-tunnel)
+                    await logFileWriter.writeRawLog(tunnelId: tunnelId, line: line)
                 default:
                     break
                 }
@@ -456,4 +533,30 @@ enum ServiceEvent: Sendable {
     case reconnectScheduled(tunnelId: String, delay: TimeInterval)
     case reconnectSucceeded(tunnelId: String)
     case reconnectFailed(tunnelId: String, error: String)
+}
+
+// MARK: - Tunnel Deletion Result
+
+/// Result of a tunnel deletion operation.
+struct TunnelDeletionResult: Sendable {
+    /// The ID of the deleted tunnel.
+    let tunnelId: String
+
+    /// The result of DNS record deletion, if applicable.
+    let dnsResult: DNSDeletionResult?
+
+    /// Whether DNS records were successfully deleted.
+    var dnsCleanupSucceeded: Bool {
+        dnsResult?.success ?? true
+    }
+
+    /// Hostnames that had their DNS records deleted.
+    var deletedHostnames: [String] {
+        dnsResult?.deletedHostnames ?? []
+    }
+
+    /// Any DNS deletion errors that occurred.
+    var dnsErrors: [String] {
+        dnsResult?.errors ?? []
+    }
 }

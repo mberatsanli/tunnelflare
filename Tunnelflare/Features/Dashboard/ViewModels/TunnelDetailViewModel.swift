@@ -60,6 +60,12 @@ final class TunnelDetailViewModel {
     /// The public hostname for this tunnel (if any).
     var publicHostname: String?
 
+    /// Saved ingress rules for quick display (loaded from local config).
+    var savedIngressRules: [IngressRule] = []
+
+    /// The last connected time for this tunnel.
+    var lastConnectedAt: Date?
+
     // MARK: - Log History State
 
     /// The current log view mode.
@@ -115,6 +121,40 @@ final class TunnelDetailViewModel {
     /// The current error, if any.
     var error: String?
 
+    // MARK: - Deletion State
+
+    /// Whether the delete confirmation dialog is showing.
+    var showDeleteConfirmation: Bool = false
+
+    /// Whether a tunnel deletion is in progress.
+    var isDeletingTunnel: Bool = false
+
+    /// Current deletion progress step.
+    var deletionStep: DeletionStep = .preparing
+
+    /// Error message from failed deletion.
+    var deletionError: String?
+
+    /// Whether to show the deletion error alert.
+    var showDeletionError: Bool = false
+
+    /// Callback when tunnel is deleted (for navigation).
+    var onTunnelDeleted: (() -> Void)?
+
+    // MARK: - Connector Cleanup State
+
+    /// Whether the cleanup confirmation dialog is showing.
+    var showCleanupConfirmation: Bool = false
+
+    /// Whether a connection cleanup is in progress.
+    var isCleaningUpConnections: Bool = false
+
+    /// Error message from failed cleanup.
+    var cleanupError: String?
+
+    /// Whether to show the cleanup error alert.
+    var showCleanupError: Bool = false
+
     // MARK: - Dependencies
 
     /// Reference to the app state.
@@ -145,14 +185,26 @@ final class TunnelDetailViewModel {
 
         defer { isLoadingConfiguration = false }
 
+        // Load last connected time from database
         do {
-            // TODO: Connect to API client when available
-            // configuration = try await apiClient.fetchTunnelConfiguration(
-            //     accountId: accountId,
-            //     tunnelId: tunnel.id
-            // )
-            try await Task.sleep(for: .milliseconds(500))
+            if let record = try await TunnelDatabase.shared.getTunnel(id: tunnel.id),
+               let lastConnectedString = record.lastConnectedAt {
+                let formatter = ISO8601DateFormatter()
+                self.lastConnectedAt = formatter.date(from: lastConnectedString)
+            }
+        } catch {
+            // Ignore database errors for lastConnectedAt
+        }
 
+        // Try to load saved ingress rules for quick display
+        let rules = await TunnelStorageManager.shared.loadIngressRules(for: tunnel.id)
+        if !rules.isEmpty {
+            self.savedIngressRules = rules
+            // Extract hostname from saved rules immediately
+            extractPublicHostname(from: rules)
+        }
+
+        do {
             // Fetch actual configuration from API
             if let accountId = appState?.selectedOrganization?.id {
                 let apiClient = CloudflareAPIClient(authManager: .shared)
@@ -160,7 +212,14 @@ final class TunnelDetailViewModel {
                     accountId: accountId,
                     tunnelId: tunnel.id
                 )
-                extractPublicHostname()
+                // Update hostname from API response
+                extractPublicHostname(from: configuration?.config.ingress)
+
+                // Save the configuration locally
+                try? await TunnelStorageManager.shared.saveConfig(
+                    tunnelId: tunnel.id,
+                    ingressRules: configuration?.config.ingress ?? []
+                )
             }
         } catch {
             self.error = error.localizedDescription
@@ -213,14 +272,15 @@ final class TunnelDetailViewModel {
         NSWorkspace.shared.open(url)
     }
 
-    /// Extracts public hostname from configuration.
-    private func extractPublicHostname() {
-        guard let rules = configuration?.config.ingress else {
-            publicHostname = nil
+    /// Extracts public hostname from ingress rules.
+    private func extractPublicHostname(from rules: [IngressRule]?) {
+        guard let rules = rules else {
             return
         }
         // Find first non-catch-all rule with a hostname
-        publicHostname = rules.first { !$0.isCatchAll }?.hostname
+        if let hostname = rules.first(where: { !$0.isCatchAll })?.hostname {
+            publicHostname = hostname
+        }
     }
 
     // MARK: - Computed Properties
@@ -299,6 +359,17 @@ final class TunnelDetailViewModel {
         tunnel?.formattedCreatedAt ?? "Unknown"
     }
 
+    /// The formatted last connected time.
+    var lastConnectedText: String {
+        guard let date = lastConnectedAt else {
+            return "Never connected"
+        }
+
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return "Last connected \(formatter.localizedString(for: date, relativeTo: Date()))"
+    }
+
     /// The connector count text.
     var connectorCountText: String {
         let count = tunnel?.connections.count ?? 0
@@ -374,6 +445,181 @@ final class TunnelDetailViewModel {
         Task {
             try? await Task.sleep(for: .seconds(2))
             hasCopiedId = false
+        }
+    }
+
+    // MARK: - Deletion Actions
+
+    /// Whether the tunnel can be deleted (not running locally or remotely).
+    var canDelete: Bool {
+        !isRunningLocally && !isRemote && !(tunnel?.isActive ?? false) && !isDeletingTunnel && !isPerformingAction
+    }
+
+    /// Requests deletion of the tunnel (shows confirmation dialog).
+    func requestDeleteTunnel() {
+        guard canDelete else { return }
+        showDeleteConfirmation = true
+    }
+
+    /// Confirms and performs the tunnel deletion with progress tracking.
+    func confirmDeleteTunnel() async {
+        guard let tunnel = tunnel else { return }
+
+        showDeleteConfirmation = false
+        isDeletingTunnel = true
+        deletionStep = .preparing
+        deletionError = nil
+
+        do {
+            guard let accountId = appState?.selectedOrganization?.id,
+                  let container = appState?.serviceContainer else {
+                throw NSError(domain: "TunnelDeletion", code: -1, userInfo: [NSLocalizedDescriptionKey: "No organization selected"])
+            }
+
+            // Step 1: Check if tunnel needs to be stopped
+            if appState?.localTunnelStates[tunnel.id]?.isRunning == true {
+                deletionStep = .stoppingTunnel
+                await appState?.stopTunnel(tunnelId: tunnel.id)
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+
+            // Step 2: Delete DNS records
+            deletionStep = .deletingDNS
+            try? await Task.sleep(for: .milliseconds(300))
+
+            // Step 3: Delete from Cloudflare
+            deletionStep = .deletingFromCloudflare
+            _ = try await container.deleteTunnel(tunnelId: tunnel.id, accountId: accountId)
+
+            // Step 4: Clean up local data
+            deletionStep = .cleaningUp
+            try? await Task.sleep(for: .milliseconds(300))
+
+            // Step 5: Complete
+            deletionStep = .completed
+            try? await Task.sleep(for: .milliseconds(500))
+
+            // Reset and navigate back
+            isDeletingTunnel = false
+            onTunnelDeleted?()
+
+        } catch {
+            deletionStep = .failed(error.localizedDescription)
+            deletionError = error.localizedDescription
+
+            // Wait before showing error
+            try? await Task.sleep(for: .seconds(1))
+            isDeletingTunnel = false
+            showDeletionError = true
+        }
+    }
+
+    /// Cancels the pending tunnel deletion.
+    func cancelDeleteTunnel() {
+        showDeleteConfirmation = false
+    }
+
+    /// Dismisses the deletion error alert.
+    func dismissDeletionError() {
+        deletionError = nil
+        showDeletionError = false
+    }
+
+    // MARK: - Connector Cleanup Actions
+
+    /// Requests cleanup of all connections (shows confirmation dialog).
+    func requestCleanupConnections() {
+        showCleanupConfirmation = true
+    }
+
+    /// Cancels the pending cleanup.
+    func cancelCleanupConnections() {
+        showCleanupConfirmation = false
+    }
+
+    /// Confirms and performs the connection cleanup.
+    func confirmCleanupConnections() async {
+        guard let tunnel = tunnel else { return }
+
+        showCleanupConfirmation = false
+        isCleaningUpConnections = true
+        cleanupError = nil
+
+        defer {
+            isCleaningUpConnections = false
+        }
+
+        do {
+            guard let accountId = appState?.selectedOrganization?.id else {
+                throw NSError(domain: "ConnectorCleanup", code: -1, userInfo: [NSLocalizedDescriptionKey: "No organization selected"])
+            }
+
+            let apiClient = CloudflareAPIClient(authManager: .shared)
+
+            // Clean up all connections via API
+            try await apiClient.cleanUpConnections(accountId: accountId, tunnelId: tunnel.id)
+
+            // Refresh tunnel from API and update local storage
+            await refreshTunnelFromAPI()
+
+        } catch {
+            cleanupError = error.localizedDescription
+            showCleanupError = true
+        }
+    }
+
+    /// Dismisses the cleanup error alert.
+    func dismissCleanupError() {
+        cleanupError = nil
+        showCleanupError = false
+    }
+
+    /// Refreshes tunnel data from API and updates local storage.
+    private func refreshTunnelFromAPI() async {
+        guard let tunnel = tunnel,
+              let accountId = appState?.selectedOrganization?.id else { return }
+
+        do {
+            let apiClient = CloudflareAPIClient(authManager: .shared)
+
+            // Fetch fresh tunnel data from API
+            let updatedTunnel = try await apiClient.fetchTunnel(
+                accountId: accountId,
+                tunnelId: tunnel.id
+            )
+
+            // Update local tunnel reference
+            self.tunnel = updatedTunnel
+
+            // Update in appState's tunnel list
+            if let index = appState?.tunnels.firstIndex(where: { $0.id == tunnel.id }) {
+                appState?.tunnels[index] = updatedTunnel
+            }
+
+            // Update local state
+            localState = appState?.localTunnelStates[tunnel.id]
+
+            // Fetch and update configuration
+            let configuration = try await apiClient.fetchTunnelConfiguration(
+                accountId: accountId,
+                tunnelId: tunnel.id
+            )
+            self.configuration = configuration
+
+            // Update hostname from fresh config
+            extractPublicHostname(from: configuration.config.ingress)
+
+            // Save updated config to local storage
+            try? await TunnelStorageManager.shared.saveConfig(
+                tunnelId: tunnel.id,
+                ingressRules: configuration.config.ingress
+            )
+
+            // Update saved ingress rules
+            self.savedIngressRules = configuration.config.ingress
+
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 

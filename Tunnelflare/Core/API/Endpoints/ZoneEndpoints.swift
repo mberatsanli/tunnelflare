@@ -236,4 +236,33 @@ enum ZoneEndpoints {
             )
         }
     }
+
+    // MARK: - Delete DNS Record
+
+    /// Endpoint to delete a DNS record.
+    ///
+    /// ## API Reference
+    /// `DELETE /zones/{zone_id}/dns_records/{record_id}`
+    struct DeleteDNSRecord: Endpoint {
+        typealias Response = DeleteDNSRecordResponse
+
+        let zoneId: String
+        let recordId: String
+
+        var path: String {
+            "zones/\(zoneId)/dns_records/\(recordId)"
+        }
+
+        let method = HTTPMethod.delete
+
+        init(zoneId: String, recordId: String) {
+            self.zoneId = zoneId
+            self.recordId = recordId
+        }
+    }
+
+    /// Response from deleting a DNS record.
+    struct DeleteDNSRecordResponse: Codable, Sendable {
+        let id: String
+    }
 }

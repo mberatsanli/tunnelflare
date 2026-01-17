@@ -70,7 +70,7 @@ struct LoginView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(40)
-        .background(backgroundGradient)
+        .background(background)
         .alert("Login Error", isPresented: Binding(
             get: { activeViewModel.showError },
             set: { _ in activeViewModel.dismissError() }
@@ -94,75 +94,42 @@ struct LoginView: View {
 
     // MARK: - View Components
 
-    /// The background gradient.
-    private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.1, green: 0.1, blue: 0.15),
-                Color(red: 0.08, green: 0.08, blue: 0.12)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
+    /// The background - clean system color.
+    private var background: some View {
+        Color(nsColor: .windowBackgroundColor)
+            .ignoresSafeArea()
     }
 
     /// The branding section with logo and title.
     private var brandingSection: some View {
-        VStack(spacing: 24) {
-            // Cloudflare-inspired logo
-            ZStack {
-                // Outer glow
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color.orange.opacity(0.3),
-                                Color.orange.opacity(0.0)
-                            ],
-                            center: .center,
-                            startRadius: 30,
-                            endRadius: 80
-                        )
-                    )
-                    .frame(width: 160, height: 160)
+        VStack(spacing: 16) {
+            // Simple cloud icon - no glow effects
+            Image(systemName: "cloud.fill")
+                .font(.system(size: 56, weight: .light))
+                .foregroundStyle(.orange.opacity(0.9))
 
-                // Logo icon
-                Image(systemName: "cloud.fill")
-                    .font(.system(size: 72, weight: .medium))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.orange, .orange.opacity(0.8)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .shadow(color: .orange.opacity(0.5), radius: 10, x: 0, y: 4)
-            }
-
-            VStack(spacing: 12) {
-                Text("Cloudflare Tunnel UI")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+            VStack(spacing: 8) {
+                Text("Tunnelflare")
+                    .font(.system(size: 28, weight: .semibold, design: .rounded))
+                    .foregroundColor(.primary)
 
                 Text("Manage your Cloudflare Tunnels\nfrom your Mac.")
-                    .font(.title3)
-                    .foregroundColor(.white.opacity(0.7))
+                    .font(.body)
+                    .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
-                    .lineSpacing(4)
             }
         }
     }
 
-    /// The login section with API Token input.
+    /// The login section with API Token input - wrapped in a card.
     private var loginSection: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 24) {
             // API Token input
             VStack(alignment: .leading, spacing: 8) {
                 Text("API Token")
                     .font(.subheadline)
                     .fontWeight(.medium)
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(.primary)
 
                 HStack(spacing: 8) {
                     Group {
@@ -172,21 +139,16 @@ struct LoginView: View {
                             SecureField("Enter your Cloudflare API Token", text: $apiToken)
                         }
                     }
-                    .textFieldStyle(.plain)
-                    .padding(12)
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(8)
-                    .foregroundColor(.white)
+                    .textFieldStyle(.roundedBorder)
 
                     Button(action: { showToken.toggle() }) {
                         Image(systemName: showToken ? "eye.slash" : "eye")
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .frame(width: 32)
+                    .frame(width: 28)
                 }
             }
-            .frame(maxWidth: 400)
 
             // Login button
             Button(action: {
@@ -194,24 +156,20 @@ struct LoginView: View {
                     await activeViewModel.loginWithAPIToken(apiToken.trimmingCharacters(in: .whitespacesAndNewlines))
                 }
             }) {
-                HStack(spacing: 12) {
+                HStack(spacing: 8) {
                     if activeViewModel.isLoading {
                         ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(0.8)
-                    } else {
-                        Image(systemName: "key.fill")
-                            .font(.system(size: 16, weight: .semibold))
+                            .controlSize(.small)
                     }
 
-                    Text(activeViewModel.isLoading ? "Validating..." : "Connect")
-                        .font(.headline)
+                    Text(activeViewModel.isLoading ? "Connecting..." : "Connect")
+                        .fontWeight(.medium)
                 }
-                .frame(minWidth: 200)
-                .padding(.vertical, 14)
-                .padding(.horizontal, 32)
+                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(CloudflareButtonStyle())
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+            .controlSize(.large)
             .disabled(!isLoginEnabled)
             .keyboardShortcut(.return, modifiers: [])
 
@@ -219,67 +177,47 @@ struct LoginView: View {
             if activeViewModel.isLoading {
                 Text("Validating your API token with Cloudflare...")
                     .font(.caption)
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(.secondary)
             }
         }
+        .padding(32)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(nsColor: .controlBackgroundColor))
+                .shadow(color: .black.opacity(0.05), radius: 10, y: 5)
+        )
+        .frame(maxWidth: 380)
     }
 
     /// The help section with link to create token.
     private var helpSection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             Text("Need an API Token?")
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(.secondary)
 
-            Link(destination: URL(string: "https://dash.cloudflare.com/profile/api-tokens")!) {
-                HStack(spacing: 6) {
-                    Text("Create one in Cloudflare Dashboard")
-                        .font(.subheadline)
-                    Image(systemName: "arrow.up.right.square")
-                        .font(.caption)
+            HStack(spacing: 16) {
+                Link(destination: URL(string: "https://github.com/mberatsanli/tunnelflare/blob/main/HOWTO.md#1-getting-your-api-token")!) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "book")
+                            .font(.caption)
+                        Text("How to get one")
+                            .font(.subheadline)
+                    }
+                    .foregroundColor(.orange)
                 }
-                .foregroundColor(.orange)
+
+                Link(destination: URL(string: "https://dash.cloudflare.com/profile/api-tokens")!) {
+                    HStack(spacing: 4) {
+                        Text("Cloudflare Dashboard")
+                            .font(.subheadline)
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.caption)
+                    }
+                    .foregroundColor(.orange)
+                }
             }
-
-            Text("Required permissions: Account:Read, Cloudflare Tunnel:Edit")
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.5))
-                .multilineTextAlignment(.center)
         }
-    }
-}
-
-// MARK: - Cloudflare Button Style
-
-/// A custom button style matching Cloudflare branding.
-struct CloudflareButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundColor(.white)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.orange,
-                                Color.orange.opacity(0.85)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .shadow(
-                        color: .orange.opacity(configuration.isPressed ? 0.2 : 0.4),
-                        radius: configuration.isPressed ? 4 : 8,
-                        x: 0,
-                        y: configuration.isPressed ? 2 : 4
-                    )
-            )
-            .opacity(isEnabled ? 1.0 : 0.6)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 

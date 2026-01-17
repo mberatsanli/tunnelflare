@@ -398,6 +398,18 @@ extension CloudflareAPIClient {
         _ = try await request(TunnelEndpoints.DeleteTunnel(accountId: accountId, tunnelId: tunnelId))
     }
 
+    /// Cleans up all connections for a tunnel.
+    ///
+    /// Removes connections that are no longer active.
+    ///
+    /// - Parameters:
+    ///   - accountId: The account ID.
+    ///   - tunnelId: The tunnel ID.
+    /// - Throws: `APIError` if the request fails.
+    func cleanUpConnections(accountId: String, tunnelId: String) async throws {
+        _ = try await request(TunnelEndpoints.CleanUpConnections(accountId: accountId, tunnelId: tunnelId))
+    }
+
     /// Fetches the connection token for a tunnel.
     ///
     /// The token is used by cloudflared to authenticate and run the tunnel.
@@ -555,6 +567,118 @@ extension CloudflareAPIClient {
             content: content,
             proxied: true
         ))
+    }
+
+    /// Deletes a DNS record.
+    ///
+    /// - Parameters:
+    ///   - zoneId: The zone ID.
+    ///   - recordId: The record ID to delete.
+    /// - Throws: `APIError` if the request fails.
+    func deleteDNSRecord(zoneId: String, recordId: String) async throws {
+        _ = try await request(ZoneEndpoints.DeleteDNSRecord(zoneId: zoneId, recordId: recordId))
+    }
+
+    /// Deletes all DNS CNAME records associated with a tunnel.
+    ///
+    /// This method:
+    /// 1. Fetches the tunnel configuration to get hostnames
+    /// 2. For each hostname, finds the zone and CNAME record
+    /// 3. Deletes the CNAME record if it points to the tunnel
+    ///
+    /// - Parameters:
+    ///   - accountId: The account ID.
+    ///   - tunnelId: The tunnel ID.
+    /// - Returns: Result containing deleted hostnames and any errors.
+    func deleteDNSRecordsForTunnel(accountId: String, tunnelId: String) async -> DNSDeletionResult {
+        var deletedHostnames: [String] = []
+        var errors: [String] = []
+
+        // Get tunnel configuration to find hostnames
+        let configuration: TunnelConfiguration
+        do {
+            configuration = try await fetchTunnelConfiguration(accountId: accountId, tunnelId: tunnelId)
+        } catch {
+            return DNSDeletionResult(deletedHostnames: [], errors: ["Failed to fetch tunnel configuration: \(error.localizedDescription)"])
+        }
+
+        // Get all zones for lookups
+        let zones: [Zone]
+        do {
+            zones = try await fetchZones(accountId: accountId, activeOnly: false)
+        } catch {
+            return DNSDeletionResult(deletedHostnames: [], errors: ["Failed to fetch zones: \(error.localizedDescription)"])
+        }
+
+        // Extract hostnames from ingress rules
+        let hostnames = configuration.config.ingress
+            .compactMap { $0.hostname }
+            .filter { !$0.isEmpty }
+
+        // Delete DNS record for each hostname
+        for hostname in hostnames {
+            // Find the zone for this hostname
+            guard let zone = findZone(for: hostname, in: zones) else {
+                errors.append("No zone found for hostname: \(hostname)")
+                continue
+            }
+
+            // Find the CNAME record for this hostname
+            do {
+                let records = try await fetchDNSRecords(zoneId: zone.id, recordType: "CNAME", name: hostname)
+
+                // Find record pointing to this tunnel
+                let tunnelCNAME = "\(tunnelId).cfargotunnel.com"
+                guard let record = records.first(where: { $0.content == tunnelCNAME }) else {
+                    // No matching record found - not an error, just skip
+                    continue
+                }
+
+                // Delete the record
+                try await deleteDNSRecord(zoneId: zone.id, recordId: record.id)
+                deletedHostnames.append(hostname)
+
+            } catch {
+                errors.append("Failed to delete DNS for \(hostname): \(error.localizedDescription)")
+            }
+        }
+
+        return DNSDeletionResult(deletedHostnames: deletedHostnames, errors: errors)
+    }
+
+    /// Finds the zone that matches a hostname.
+    private func findZone(for hostname: String, in zones: [Zone]) -> Zone? {
+        // Sort zones by name length (longest first) to match most specific zone
+        let sortedZones = zones.sorted { $0.name.count > $1.name.count }
+
+        for zone in sortedZones {
+            if hostname == zone.name || hostname.hasSuffix(".\(zone.name)") {
+                return zone
+            }
+        }
+
+        return nil
+    }
+}
+
+// MARK: - DNS Deletion Result
+
+/// Result of deleting DNS records for a tunnel.
+struct DNSDeletionResult: Sendable {
+    /// Hostnames that were successfully deleted.
+    let deletedHostnames: [String]
+
+    /// Any errors that occurred during deletion.
+    let errors: [String]
+
+    /// Whether all deletions succeeded.
+    var success: Bool {
+        errors.isEmpty
+    }
+
+    /// Whether any DNS records were deleted.
+    var hasDeleted: Bool {
+        !deletedHostnames.isEmpty
     }
 }
 

@@ -166,14 +166,7 @@ final class AppSettingsManager {
         }
     }
 
-    /// Whether to persist logs to files.
-    var persistLogsToFile: Bool {
-        get { settings.persistLogsToFile }
-        set {
-            settings.persistLogsToFile = newValue
-            save()
-        }
-    }
+    // Note: persistLogsToFile removed - logs are always persisted per-tunnel now
 
     // MARK: - Public Methods
 
@@ -286,8 +279,7 @@ struct AppSettings: Codable, Equatable {
     /// How to display log entries.
     var logDisplayMode: LogDisplayMode = .terminal
 
-    /// Whether to persist logs to files.
-    var persistLogsToFile: Bool = true
+    // Note: persistLogsToFile removed - logs are always persisted per-tunnel now
 
     // MARK: - Default Values
 

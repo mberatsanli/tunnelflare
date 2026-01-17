@@ -290,7 +290,7 @@ extension LogBuffer {
         var lines: [String] = []
 
         // Add header
-        lines.append("# Cloudflare Tunnel UI - Log Export")
+        lines.append("# Tunnelflare - Log Export")
         if let name = tunnelName {
             lines.append("# Tunnel: \(name)")
         }

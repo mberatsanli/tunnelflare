@@ -70,6 +70,15 @@ final class AppState {
     /// Timestamp of the last successful tunnel sync.
     var lastTunnelSync: Date?
 
+    /// Auto-refresh interval in seconds (default: 60 seconds).
+    var autoRefreshInterval: TimeInterval = 60
+
+    /// Whether auto-refresh is enabled.
+    var isAutoRefreshEnabled: Bool = true
+
+    /// The auto-refresh task.
+    private var autoRefreshTask: Task<Void, Never>?
+
     // MARK: - UI State
 
     /// Whether the dashboard window is currently visible.
@@ -193,6 +202,9 @@ final class AppState {
 
     /// Clears authentication state on logout.
     func clearAuthentication() {
+        // Stop auto-refresh
+        stopAutoRefresh()
+
         isAuthenticated = false
         currentUser = nil
         organizations = []
@@ -269,6 +281,9 @@ final class AppState {
             if let status = await container.processManager.getStatus(tunnelId: tunnelId) {
                 updateLocalTunnelState(tunnelId: tunnelId, state: status)
             }
+
+            // Update last connected time in database (silent failure - don't fail tunnel start)
+            try? await TunnelDatabase.shared.updateLastConnectedAt(tunnelId: tunnelId, date: Date())
         } catch {
             updateLocalTunnelState(tunnelId: tunnelId, state: .error(error.localizedDescription))
             throw AppError.from(error)
@@ -341,6 +356,108 @@ final class AppState {
 
         for tunnel in tunnels {
             await container.registerTunnelName(tunnelId: tunnel.id, name: tunnel.name)
+        }
+    }
+
+    // MARK: - Auto-Refresh
+
+    /// Starts the auto-refresh task for tunnel data.
+    ///
+    /// This refreshes all tunnel data from the API at regular intervals.
+    func startAutoRefresh() {
+        stopAutoRefresh()
+
+        guard isAutoRefreshEnabled else { return }
+
+        autoRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                // Wait for the refresh interval
+                try? await Task.sleep(for: .seconds(self?.autoRefreshInterval ?? 60))
+
+                guard !Task.isCancelled else { break }
+
+                // Refresh tunnels
+                await self?.refreshAllTunnels()
+            }
+        }
+
+        print("[AppState] Auto-refresh started with interval: \(autoRefreshInterval)s")
+    }
+
+    /// Stops the auto-refresh task.
+    func stopAutoRefresh() {
+        autoRefreshTask?.cancel()
+        autoRefreshTask = nil
+        print("[AppState] Auto-refresh stopped")
+    }
+
+    /// Refreshes all tunnel data from the API (background, no loading indicator).
+    @MainActor
+    func refreshAllTunnels() async {
+        guard isAuthenticated,
+              let accountId = selectedOrganization?.id else {
+            return
+        }
+
+        // Don't refresh if already loading
+        guard !isLoadingTunnels else { return }
+
+        // Note: No loading indicator for background refresh
+        // isLoadingTunnels = true
+
+        do {
+            let apiClient = CloudflareAPIClient(authManager: .shared)
+            let updatedTunnels = try await apiClient.fetchTunnels(accountId: accountId)
+
+            // Update tunnels
+            tunnels = updatedTunnels
+            lastTunnelSync = Date()
+            tunnelLoadError = nil
+
+            // Save to database for cache
+            await saveTunnelsToDatabase(tunnels: updatedTunnels, accountId: accountId)
+
+            // Update last connected time for active tunnels (has connections from remote)
+            await updateLastConnectedForActiveTunnels(updatedTunnels)
+
+            // Register tunnel names for notifications
+            await registerTunnelNamesWithService()
+
+            print("[AppState] Auto-refresh: Updated \(updatedTunnels.count) tunnels")
+        } catch {
+            print("[AppState] Auto-refresh error: \(error.localizedDescription)")
+            tunnelLoadError = error.localizedDescription
+        }
+    }
+
+    /// Saves tunnels to the local database.
+    private func saveTunnelsToDatabase(tunnels: [Tunnel], accountId: String) async {
+        do {
+            let db = TunnelDatabase.shared
+            let records = tunnels.map { TunnelRecord(from: $0, accountId: accountId) }
+            try await db.upsertTunnels(records)
+            print("[AppState] Saved \(tunnels.count) tunnels to database")
+        } catch {
+            print("[AppState] Failed to save tunnels to database: \(error)")
+        }
+    }
+
+    /// Updates last connected time for tunnels that are active (have remote connections).
+    private func updateLastConnectedForActiveTunnels(_ tunnels: [Tunnel]) async {
+        let db = TunnelDatabase.shared
+        let now = Date()
+
+        for tunnel in tunnels {
+            // Only update if tunnel has active connections (running remotely or locally)
+            guard tunnel.isActive else { continue }
+
+            // Skip if running locally (already updated in startTunnel)
+            if localTunnelStates[tunnel.id]?.isRunning == true {
+                continue
+            }
+
+            // Update last connected time for remote-only active tunnels
+            try? await db.updateLastConnectedAt(tunnelId: tunnel.id, date: now)
         }
     }
 

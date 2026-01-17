@@ -14,7 +14,7 @@ import os.log
 /// Manages writing tunnel logs to disk.
 ///
 /// LogFileWriter creates and maintains log files for each tunnel session.
-/// Logs are stored in `~/.tunnelflare/logs/<tunnel-id>-<timestamp>.log`.
+/// Logs are stored per-tunnel at `~/.tunnelflare/tunnels/<tunnel-id>/logs/<timestamp>.log`.
 ///
 /// ## Usage
 /// ```swift
@@ -45,8 +45,8 @@ actor LogFileWriter {
     /// Logger for file operations.
     private let logger = Logger.app
 
-    /// The base directory for log files.
-    private let logsDirectory: URL
+    /// Reference to the storage manager for per-tunnel directories.
+    private let storageManager = TunnelStorageManager.shared
 
     /// Date formatter for log file timestamps.
     private static let timestampFormatter: DateFormatter = {
@@ -58,11 +58,7 @@ actor LogFileWriter {
     // MARK: - Initialization
 
     init() {
-        // Set up logs directory at ~/.tunnelflare/logs/
-        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
-        self.logsDirectory = homeDirectory
-            .appendingPathComponent(".tunnelflare", isDirectory: true)
-            .appendingPathComponent("logs", isDirectory: true)
+        // No initialization needed - uses TunnelStorageManager for paths
     }
 
     // MARK: - Public Methods
@@ -70,21 +66,22 @@ actor LogFileWriter {
     /// Starts logging for a tunnel session.
     ///
     /// Creates a new log file and begins writing logs.
+    /// Logs are stored at `~/.tunnelflare/tunnels/<tunnel-id>/logs/<timestamp>.log`.
     ///
     /// - Parameter tunnelId: The tunnel ID to start logging for.
     /// - Throws: If the log file cannot be created.
-    func startLogging(tunnelId: String) throws {
+    func startLogging(tunnelId: String) async throws {
         // Close any existing file for this tunnel
         closeFile(for: tunnelId)
 
-        // Ensure logs directory exists
-        try ensureLogsDirectoryExists()
+        // Get per-tunnel logs directory (creates if needed)
+        let logsDir = try await storageManager.logsDirectory(for: tunnelId)
 
-        // Create log file with timestamp
+        // Create log file with timestamp only (tunnel ID is in directory path)
         let timestamp = Date()
         let timestampString = Self.timestampFormatter.string(from: timestamp)
-        let filename = "\(tunnelId)-\(timestampString).log"
-        let filePath = logsDirectory.appendingPathComponent(filename)
+        let filename = "\(timestampString).log"
+        let filePath = logsDir.appendingPathComponent(filename)
 
         // Create the file
         FileManager.default.createFile(atPath: filePath.path, contents: nil)
@@ -181,36 +178,71 @@ actor LogFileWriter {
         filePaths[tunnelId]
     }
 
-    /// Gets all log files in the logs directory.
+    /// Gets all log files across all tunnels.
     ///
-    /// - Returns: Array of log file URLs.
-    func getAllLogFiles() throws -> [URL] {
-        guard FileManager.default.fileExists(atPath: logsDirectory.path) else {
-            return []
+    /// Scans all tunnel directories and collects log files.
+    ///
+    /// - Returns: Array of log file URLs sorted by modification date (newest first).
+    func getAllLogFiles() async -> [URL] {
+        let tunnelIds = await storageManager.allStoredTunnelIds()
+        var allLogs: [URL] = []
+
+        for tunnelId in tunnelIds {
+            do {
+                let logsDir = try await storageManager.logsDirectory(for: tunnelId)
+                let contents = try FileManager.default.contentsOfDirectory(
+                    at: logsDir,
+                    includingPropertiesForKeys: [.contentModificationDateKey],
+                    options: [.skipsHiddenFiles]
+                )
+
+                let logFiles = contents.filter { $0.pathExtension == "log" }
+                allLogs.append(contentsOf: logFiles)
+            } catch {
+                logger.warning("Failed to scan logs for tunnel \(tunnelId): \(error.localizedDescription)")
+            }
         }
 
-        let contents = try FileManager.default.contentsOfDirectory(
-            at: logsDirectory,
-            includingPropertiesForKeys: [.contentModificationDateKey],
-            options: [.skipsHiddenFiles]
-        )
-
-        return contents
-            .filter { $0.pathExtension == "log" }
-            .sorted { url1, url2 in
-                let date1 = (try? url1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
-                let date2 = (try? url2.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
-                return date1 > date2
-            }
+        // Sort by modification date (newest first)
+        return allLogs.sorted { url1, url2 in
+            let date1 = (try? url1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
+            let date2 = (try? url2.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
+            return date1 > date2
+        }
     }
 
-    /// Cleans up old log files.
+    /// Gets all log files for a specific tunnel.
+    ///
+    /// - Parameter tunnelId: The tunnel ID.
+    /// - Returns: Array of log file URLs sorted by modification date (newest first).
+    func getLogFiles(for tunnelId: String) async -> [URL] {
+        do {
+            let logsDir = try await storageManager.logsDirectory(for: tunnelId)
+            let contents = try FileManager.default.contentsOfDirectory(
+                at: logsDir,
+                includingPropertiesForKeys: [.contentModificationDateKey],
+                options: [.skipsHiddenFiles]
+            )
+
+            return contents
+                .filter { $0.pathExtension == "log" }
+                .sorted { url1, url2 in
+                    let date1 = (try? url1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
+                    let date2 = (try? url2.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
+                    return date1 > date2
+                }
+        } catch {
+            logger.warning("Failed to get logs for tunnel \(tunnelId): \(error.localizedDescription)")
+            return []
+        }
+    }
+
+    /// Cleans up old log files across all tunnels.
     ///
     /// - Parameter daysToKeep: Number of days of logs to keep.
-    func cleanupOldLogs(daysToKeep: Int = 30) throws {
+    func cleanupOldLogs(daysToKeep: Int = 30) async {
         let cutoffDate = Calendar.current.date(byAdding: .day, value: -daysToKeep, to: Date()) ?? Date()
-
-        let logFiles = try getAllLogFiles()
+        let logFiles = await getAllLogFiles()
 
         for file in logFiles {
             guard let modificationDate = try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate else {
@@ -218,8 +250,12 @@ actor LogFileWriter {
             }
 
             if modificationDate < cutoffDate {
-                try FileManager.default.removeItem(at: file)
-                logger.info("Deleted old log file: \(file.lastPathComponent)")
+                do {
+                    try FileManager.default.removeItem(at: file)
+                    logger.info("Deleted old log file: \(file.lastPathComponent)")
+                } catch {
+                    logger.warning("Failed to delete old log: \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -235,18 +271,6 @@ actor LogFileWriter {
     }
 
     // MARK: - Private Methods
-
-    /// Ensures the logs directory exists.
-    private func ensureLogsDirectoryExists() throws {
-        if !FileManager.default.fileExists(atPath: logsDirectory.path) {
-            try FileManager.default.createDirectory(
-                at: logsDirectory,
-                withIntermediateDirectories: true,
-                attributes: nil
-            )
-            logger.info("Created logs directory at \(self.logsDirectory.path)")
-        }
-    }
 
     /// Closes a file handle for a tunnel.
     private func closeFile(for tunnelId: String) {

@@ -94,7 +94,7 @@ struct SettingsView: View {
             VStack(spacing: 12) {
                 SettingsToggle(
                     title: "Launch at Login",
-                    description: "Automatically start Cloudflare Tunnel UI when you log in to your Mac",
+                    description: "Automatically start Tunnelflare when you log in to your Mac",
                     isOn: $viewModel.launchAtLogin
                 )
                 .accessibilityLabel("Launch at Login")
@@ -242,14 +242,10 @@ struct SettingsView: View {
                 .accessibilityLabel("Log Display Mode")
                 .accessibilityHint("Choose between terminal-style or row-by-row log display")
 
-                SettingsToggle(
-                    title: "Save Logs to File",
-                    description: "Persist tunnel logs to ~/.tunnelflare/logs/",
-                    isOn: $viewModel.persistLogsToFile
-                )
-                .accessibilityLabel("Save Logs to File")
-                .accessibilityValue(viewModel.persistLogsToFile ? "On" : "Off")
-                .accessibilityHint("Toggle to save logs to disk for later review")
+                // Note: Logs are always saved per-tunnel at ~/.tunnelflare/tunnels/<id>/logs/
+                Text("Logs are automatically saved per-tunnel")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
         }
     }
