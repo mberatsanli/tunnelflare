@@ -265,6 +265,34 @@ actor CloudflareAPIClient {
         }
     }
 
+    /// Decodes the response data with pagination info.
+    private func decodeResponseWithPagination<E: Endpoint>(data: Data, endpoint: E) throws -> (E.Response, ResultInfo?) {
+        // Handle empty responses
+        if data.isEmpty {
+            if E.Response.self == EmptyResult.self {
+                return (EmptyResult() as! E.Response, nil)
+            }
+            throw APIError.emptyResponse
+        }
+
+        do {
+            // Standard API response with pagination
+            let apiResponse = try decoder.decode(APIResponse<E.Response>.self, from: data)
+
+            guard apiResponse.success else {
+                throw APIError.apiError(errors: apiResponse.errors ?? [])
+            }
+
+            return (apiResponse.result, apiResponse.resultInfo)
+
+        } catch let error as APIError {
+            throw error
+        } catch {
+            logger.error("Decoding error: \(error.localizedDescription)")
+            throw APIError.decodingError(error)
+        }
+    }
+
     /// Retries a request with exponential backoff.
     private func retryRequest<E: Endpoint>(
         _ endpoint: E,
@@ -353,15 +381,120 @@ extension CloudflareAPIClient {
 
 extension CloudflareAPIClient {
 
-    /// Fetches all tunnels for an account.
+    /// Fetches all tunnels for an account with automatic pagination.
+    ///
+    /// This method automatically fetches all pages of results, not just the first page.
     ///
     /// - Parameters:
     ///   - accountId: The account ID.
     ///   - includeDeleted: Whether to include deleted tunnels.
-    /// - Returns: An array of tunnels.
+    /// - Returns: An array of all tunnels.
     /// - Throws: `APIError` if the request fails.
     func fetchTunnels(accountId: String, includeDeleted: Bool = false) async throws -> [Tunnel] {
-        try await request(TunnelEndpoints.ListTunnels(accountId: accountId, isDeleted: includeDeleted))
+        var allTunnels: [Tunnel] = []
+        var currentPage = 1
+        let perPage = APIConstants.defaultPageSize
+
+        while true {
+            let endpoint = TunnelEndpoints.ListTunnels(
+                accountId: accountId,
+                page: currentPage,
+                perPage: perPage,
+                isDeleted: includeDeleted
+            )
+
+            let (tunnels, resultInfo) = try await requestWithPagination(endpoint)
+            allTunnels.append(contentsOf: tunnels)
+
+            // Check if there are more pages
+            guard let info = resultInfo, info.hasMorePages else {
+                break
+            }
+
+            currentPage += 1
+
+            // Safety limit to prevent infinite loops
+            if currentPage > 100 {
+                logger.warning("Pagination safety limit reached at page 100")
+                break
+            }
+        }
+
+        logger.info("Fetched \(allTunnels.count) tunnels across \(currentPage) page(s)")
+        return allTunnels
+    }
+
+    /// Performs a request and returns both the result and pagination info.
+    private func requestWithPagination<E: Endpoint>(_ endpoint: E) async throws -> (E.Response, ResultInfo?) where E.Response: Decodable {
+        let startTime = Date()
+        let requestId = UUID().uuidString.prefix(8)
+
+        // Check rate limit before making request
+        if let rateLimitInfo = rateLimitState[endpoint.path],
+           rateLimitInfo.resetAt > Date(),
+           rateLimitInfo.remaining == 0 {
+            let waitTime = rateLimitInfo.resetAt.timeIntervalSinceNow
+            logger.warning("[\(requestId)] Rate limited, waiting \(waitTime)s")
+            throw APIError.rateLimited(retryAfter: waitTime)
+        }
+
+        // Get access token if required
+        var accessToken: String? = nil
+        if endpoint.requiresAuthentication {
+            do {
+                accessToken = try await authManager.getAccessToken()
+            } catch {
+                logger.error("[\(requestId)] Failed to get access token: \(error.localizedDescription)")
+                throw APIError.authenticationRequired
+            }
+
+            guard accessToken != nil else {
+                throw APIError.authenticationRequired
+            }
+        }
+
+        // Build request
+        guard let request = endpoint.buildRequest(baseURL: baseURL, accessToken: accessToken) else {
+            throw APIError.invalidURL
+        }
+
+        logger.logRequest(method: endpoint.method.rawValue, path: endpoint.path, requestId: String(requestId))
+
+        do {
+            // Perform request
+            let (data, response) = try await session.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.invalidResponse
+            }
+
+            let duration = Date().timeIntervalSince(startTime)
+            logger.logResponse(
+                statusCode: httpResponse.statusCode,
+                path: endpoint.path,
+                duration: duration,
+                requestId: String(requestId)
+            )
+
+            // Update rate limit info from headers
+            updateRateLimitInfo(from: httpResponse, for: endpoint.path)
+
+            // Handle non-success status codes
+            let statusCode = httpResponse.statusCode
+            guard (200...299).contains(statusCode) else {
+                throw APIError.from(statusCode: statusCode, data: data)
+            }
+
+            // Decode with pagination info
+            return try decodeResponseWithPagination(data: data, endpoint: endpoint)
+
+        } catch let error as APIError {
+            throw error
+        } catch let error as URLError {
+            throw APIError.from(urlError: error)
+        } catch {
+            throw APIError.networkError(error)
+        }
     }
 
     /// Fetches a specific tunnel.

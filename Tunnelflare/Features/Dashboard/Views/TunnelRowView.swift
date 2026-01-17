@@ -159,6 +159,11 @@ struct TunnelRowView: View {
             } else if tunnel.isActive {
                 BadgeView(text: "Remote", color: .gray)
                     .accessibilityLabel("Running remotely")
+            } else {
+                // Invisible placeholder to prevent layout shift when badge appears
+                BadgeView(text: "Local", color: .clear)
+                    .opacity(0)
+                    .accessibilityHidden(true)
             }
         }
     }

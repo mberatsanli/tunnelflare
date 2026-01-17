@@ -32,6 +32,7 @@ import SwiftUI
 ///     TunnelListView()
 /// }
 /// ```
+@MainActor
 @Observable
 final class AppState {
 

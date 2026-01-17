@@ -135,6 +135,38 @@ struct DashboardView: View {
             detailContent
         }
         .navigationSplitViewStyle(.balanced)
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                // Show different toolbar items based on selected navigation
+                switch viewModel.selectedNavigation {
+                case .tunnels:
+                    Button {
+                        Task {
+                            await appState.refreshAllTunnels()
+                        }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .help("Refresh Tunnels (⌘R)")
+
+                    Button {
+                        viewModel.showNewTunnelWizard()
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .help("New Tunnel (⌘N)")
+
+                case .logs:
+                    // Logs page - no toolbar buttons needed
+                    // (LogsView has its own filter/export controls)
+                    EmptyView()
+
+                case .settings:
+                    // Settings page - no toolbar buttons needed
+                    EmptyView()
+                }
+            }
+        }
         .task {
             // Initialize ServiceContainer if not already done
             if appState.serviceContainer == nil {

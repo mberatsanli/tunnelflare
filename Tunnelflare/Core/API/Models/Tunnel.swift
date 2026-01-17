@@ -212,11 +212,10 @@ extension Tunnel {
 
 extension Tunnel: Comparable {
     static func < (lhs: Tunnel, rhs: Tunnel) -> Bool {
-        // Sort by: active status, then by name
-        if lhs.isActive != rhs.isActive {
-            return lhs.isActive
-        }
-        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        // Sort alphabetically by name only.
+        // We don't sort by isActive because it can change between cache and API loads,
+        // causing the list to reorder and flicker.
+        lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
     }
 }
 
