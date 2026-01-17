@@ -328,8 +328,9 @@ struct MenuBarView: View {
     // MARK: - Actions
 
     private func refreshTunnels() {
-        // TODO: Implement tunnel refresh
-        // This will be connected to the API client in a future task
+        Task {
+            await appState.refreshAllTunnels()
+        }
     }
 
     private func selectTunnel(_ tunnel: Tunnel) {
