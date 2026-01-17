@@ -11,9 +11,8 @@ import SwiftUI
 /// The tunnel list view in the dashboard.
 ///
 /// TunnelListView displays all tunnels with:
-/// - Header with title and "New Tunnel" button
-/// - Search field with debouncing
-/// - Refresh button
+/// - Header with title, refresh, and "New Tunnel" button
+/// - Native searchable toolbar integration
 /// - Tunnel rows with status, name, type, service, and controls
 /// - Empty state when no tunnels exist
 /// - Loading state during data fetch
@@ -27,7 +26,6 @@ struct TunnelListView: View {
 
     @State private var viewModel = TunnelListViewModel()
     @State private var refreshTask: Task<Void, Never>?
-    @State private var searchDebouncer = Debouncer(delay: 0.3)
 
     // MARK: - Callbacks
 
@@ -49,6 +47,14 @@ struct TunnelListView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
+        .searchable(
+            text: $viewModel.searchText,
+            placement: .toolbar,
+            prompt: "Search tunnels..."
+        )
+        .onChange(of: viewModel.searchText) { _, newValue in
+            viewModel.updateSearch(newValue)
+        }
         .onAppear {
             viewModel.appState = appState
         }
@@ -112,7 +118,7 @@ struct TunnelListView: View {
 
     private var headerSection: some View {
         VStack(spacing: 12) {
-            // Title row
+            // Title row with actions
             HStack {
                 Text("Tunnels")
                     .font(.title2)
@@ -121,49 +127,13 @@ struct TunnelListView: View {
 
                 Spacer()
 
-                Button(action: onNewTunnel) {
-                    Label("New Tunnel", systemImage: "plus")
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
-                .controlSize(.regular)
-                .accessibilityLabel("Create new tunnel")
-                .accessibilityHint("Opens the tunnel creation wizard")
-            }
-
-            // Search and refresh row
-            HStack(spacing: 12) {
-                // Search field with debouncing
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
+                // Tunnel count
+                if !viewModel.isEmpty {
+                    Text(viewModel.tunnelCountText)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
-
-                    TextField("Search tunnels...", text: $viewModel.searchText)
-                        .textFieldStyle(.plain)
-                        .accessibilityLabel("Search tunnels")
-                        .accessibilityHint("Type to filter tunnels by name")
-                        .onChange(of: viewModel.searchText) { _, newValue in
-                            searchDebouncer.debounce {
-                                viewModel.updateSearch(newValue)
-                            }
-                        }
-
-                    if !viewModel.searchText.isEmpty {
-                        Button(action: viewModel.clearSearch) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Clear search")
-                        .transition(.opacity.combined(with: .scale))
-                    }
+                        .accessibilityLabel("\(viewModel.tunnelCountText)")
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .animation(.easeInOut(duration: 0.2), value: viewModel.searchText.isEmpty)
 
                 // Refresh button
                 Button(action: refresh) {
@@ -182,13 +152,14 @@ struct TunnelListView: View {
                 .accessibilityLabel("Refresh tunnels")
                 .accessibilityHint("Reloads the tunnel list from Cloudflare")
 
-                // Tunnel count
-                if !viewModel.isEmpty {
-                    Text(viewModel.tunnelCountText)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("\(viewModel.tunnelCountText)")
+                Button(action: onNewTunnel) {
+                    Label("New Tunnel", systemImage: "plus")
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+                .controlSize(.regular)
+                .accessibilityLabel("Create new tunnel")
+                .accessibilityHint("Opens the tunnel creation wizard")
             }
 
             // Last sync info with auto-refresh indicator
@@ -303,29 +274,8 @@ struct TunnelListView: View {
     // MARK: - No Results View
 
     private var noResultsView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 32))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-
-            Text("No Matching Tunnels")
-                .font(.headline)
-
-            Text("No tunnels match \"\(viewModel.searchText)\"")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Button("Clear Search") {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    viewModel.clearSearch()
-                }
-            }
-            .buttonStyle(.bordered)
-            .padding(.top, 4)
-            .accessibilityHint("Clears the search field to show all tunnels")
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ContentUnavailableView.search(text: viewModel.searchText)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("No matching tunnels. No tunnels match \(viewModel.searchText).")
     }
