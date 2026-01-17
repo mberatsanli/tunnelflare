@@ -714,8 +714,11 @@ final class TunnelDetailViewModel {
     func loadLogHistory() async {
         guard let tunnelId = tunnel?.id else { return }
 
+        // Logs are stored per-tunnel at ~/.tunnelflare/tunnels/<tunnelId>/logs/
         let logsDirectory = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".tunnelflare", isDirectory: true)
+            .appendingPathComponent("tunnels", isDirectory: true)
+            .appendingPathComponent(tunnelId, isDirectory: true)
             .appendingPathComponent("logs", isDirectory: true)
 
         guard FileManager.default.fileExists(atPath: logsDirectory.path) else {
@@ -730,10 +733,8 @@ final class TunnelDetailViewModel {
                 options: [.skipsHiddenFiles]
             )
 
-            // Filter for this tunnel's logs
-            let tunnelLogs = contents.filter { url in
-                url.lastPathComponent.hasPrefix(tunnelId) && url.pathExtension == "log"
-            }
+            // All .log files in this directory belong to this tunnel
+            let tunnelLogs = contents.filter { $0.pathExtension == "log" }
 
             // Convert to LogHistoryFile objects
             logHistoryFiles = tunnelLogs.compactMap { url -> LogHistoryFile? in
@@ -786,12 +787,27 @@ final class TunnelDetailViewModel {
 
     /// Opens the logs directory in Finder.
     func openLogsDirectory() {
+        guard let tunnelId = tunnel?.id else { return }
+
+        // Logs are stored per-tunnel at ~/.tunnelflare/tunnels/<tunnelId>/logs/
         let logsDirectory = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".tunnelflare", isDirectory: true)
+            .appendingPathComponent("tunnels", isDirectory: true)
+            .appendingPathComponent(tunnelId, isDirectory: true)
             .appendingPathComponent("logs", isDirectory: true)
 
         if FileManager.default.fileExists(atPath: logsDirectory.path) {
             NSWorkspace.shared.open(logsDirectory)
+        } else {
+            // If logs directory doesn't exist yet, open the tunnel directory
+            let tunnelDirectory = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".tunnelflare", isDirectory: true)
+                .appendingPathComponent("tunnels", isDirectory: true)
+                .appendingPathComponent(tunnelId, isDirectory: true)
+
+            if FileManager.default.fileExists(atPath: tunnelDirectory.path) {
+                NSWorkspace.shared.open(tunnelDirectory)
+            }
         }
     }
 
@@ -844,12 +860,12 @@ struct LogHistoryFile: Identifiable, Equatable, Hashable {
 
     /// Extract the timestamp from the filename.
     var sessionTimestamp: String {
-        // Format: tunnelId-yyyy-MM-dd_HH-mm-ss.log
-        // Example: abc123-2026-01-13_14-30-00.log
+        // Format: yyyy-MM-dd_HH-mm-ss.log (logs are now stored in per-tunnel directories)
+        // Example: 2026-01-13_14-30-00.log
         let name = filename.replacingOccurrences(of: ".log", with: "")
 
-        // Find the date pattern (yyyy-MM-dd_HH-mm-ss)
-        let pattern = #"(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})$"#
+        // Parse the date pattern (yyyy-MM-dd_HH-mm-ss)
+        let pattern = #"^(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})$"#
         if let regex = try? NSRegularExpression(pattern: pattern),
            let match = regex.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) {
             var parts: [String] = []

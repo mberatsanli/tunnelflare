@@ -102,8 +102,11 @@ final class AppState {
     // MARK: - Settings
 
     /// Application settings.
+    /// Returns the current settings from the shared settings manager.
     /// Uses AppSettings from Shared/Utilities/AppSettings.swift
-    var settings: AppSettings = .default
+    var settings: AppSettings {
+        settingsManager.settings
+    }
 
     /// The settings manager for system-level settings (launch at login, dock visibility).
     var settingsManager: AppSettingsManager {
@@ -509,7 +512,8 @@ final class AppState {
 
     /// Loads persisted state from UserDefaults.
     private func loadPersistedState() {
-        settings = AppSettings.load()
+        // Settings are now loaded via AppSettingsManager.shared
+        // No need to load here - settingsManager handles persistence
     }
 
     /// Persists authentication state.

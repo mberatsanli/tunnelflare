@@ -43,7 +43,8 @@ final class AppSettingsManager {
     static let shared = AppSettingsManager()
 
     /// The current settings.
-    private(set) var settings: AppSettings
+    /// This is nonisolated to allow reading from any context since AppSettings is a value type.
+    nonisolated private(set) var settings: AppSettings
 
     /// Logger for settings operations.
     private let logger = Logger(subsystem: LogConstants.subsystem, category: "settings")

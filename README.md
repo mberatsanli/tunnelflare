@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.png" alt="Tunnelflare" width="100%">
+  <img src="docs/assets/in-app.png" alt="Tunnelflare" width="100%">
 </p>
 
 <p align="center">
@@ -25,9 +25,7 @@ If you've ever managed Cloudflare Tunnels, you know the drill: open terminal, ty
 - Alerts you when something goes wrong
 
 <p align="center">
-  <img src="docs/screenshot-menubar.png" alt="Menu Bar" width="280">
-  &nbsp;&nbsp;
-  <img src="docs/screenshot-dashboard.png" alt="Dashboard" width="480">
+  <img src="docs/assets/in-menubar.png" alt="Menu Bar" width="280">
 </p>
 
 ---

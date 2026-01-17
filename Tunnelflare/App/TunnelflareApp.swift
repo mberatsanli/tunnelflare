@@ -107,27 +107,27 @@ struct TunnelflareApp: App {
 
     /// Starts all tunnels.
     private func startAllTunnels() {
-        for tunnel in appState.tunnels {
-            if appState.localTunnelStates[tunnel.id]?.isRunning != true {
-                appState.updateLocalTunnelState(tunnelId: tunnel.id, state: .starting)
-                // TODO: Connect to ProcessManager
+        Task {
+            for tunnel in appState.tunnels {
+                if appState.localTunnelStates[tunnel.id]?.isRunning != true {
+                    try? await appState.startTunnel(tunnelId: tunnel.id)
+                }
             }
         }
     }
 
     /// Stops all tunnels.
     private func stopAllTunnels() {
-        for tunnel in appState.tunnels {
-            if appState.localTunnelStates[tunnel.id]?.isRunning == true {
-                appState.updateLocalTunnelState(tunnelId: tunnel.id, state: .stopping)
-                // TODO: Connect to ProcessManager
-            }
+        Task {
+            await appState.stopAllTunnels()
         }
     }
 
     /// Refreshes tunnel status from API.
     private func refreshTunnels() {
-        // TODO: Connect to API client
+        Task {
+            await appState.refreshAllTunnels()
+        }
     }
 
     /// Restores the window frame from UserDefaults.
