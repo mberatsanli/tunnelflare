@@ -257,8 +257,8 @@ enum ExternalLinks {
     /// Cloudflare Zero Trust dashboard.
     static let zeroTrustDashboard = URL(string: "https://one.dash.cloudflare.com/")!
 
-    /// GitHub repository (if applicable).
-    static let gitHub = URL(string: "https://github.com/cloudflare/cloudflared")!
+    /// GitHub repository.
+    static let gitHub = URL(string: "https://github.com/mberatsanli/tunnelflare")!
 
     /// Support page.
     static let support = URL(string: "https://developers.cloudflare.com/support/")!

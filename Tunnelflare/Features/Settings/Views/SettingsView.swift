@@ -27,12 +27,14 @@ struct SettingsView: View {
     // MARK: - Body
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Header
-                header
+        VStack(spacing: 0) {
+            // Header
+            header
 
-                // Settings sections
+            Divider()
+
+            // Settings sections
+            ScrollView {
                 VStack(spacing: 20) {
                     generalSection
                     Divider()
@@ -43,14 +45,9 @@ struct SettingsView: View {
                     logsSection
                     Divider()
                     advancedSection
-                    Divider()
-                    aboutSection
                 }
-                .padding(.horizontal, 20)
-
-                Spacer(minLength: 20)
+                .padding(20)
             }
-            .padding(.vertical, 20)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
@@ -76,15 +73,7 @@ struct SettingsView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
-            Text("Settings")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-        }
-        .padding(.horizontal, 20)
+        PageHeader(title: "Settings")
     }
 
     // MARK: - General Section
@@ -398,85 +387,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - About Section
-
-    private var aboutSection: some View {
-        SettingsSection(title: "About", icon: "info.circle") {
-            VStack(spacing: 16) {
-                // App info
-                HStack {
-                    // App icon placeholder
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.orange.gradient)
-                        .frame(width: 64, height: 64)
-                        .overlay {
-                            Image(systemName: "network")
-                                .font(.system(size: 28))
-                                .foregroundStyle(.white)
-                        }
-                        .accessibilityHidden(true)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(AppInfo.name)
-                            .font(.headline)
-
-                        Text("Version \(viewModel.appVersion)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        Text(AppInfo.copyright)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(AppInfo.name), version \(viewModel.appVersion). \(AppInfo.copyright)")
-
-                    Spacer()
-                }
-
-                Divider()
-
-                // Links
-                VStack(spacing: 8) {
-                    SettingsLink(
-                        title: "Documentation",
-                        description: "Learn how to use Cloudflare Tunnels",
-                        icon: "book",
-                        action: viewModel.openDocumentation
-                    )
-                    .accessibilityLabel("Documentation")
-                    .accessibilityHint("Opens Cloudflare Tunnel documentation in your browser")
-
-                    SettingsLink(
-                        title: "Cloudflare Dashboard",
-                        description: "Manage your Cloudflare account",
-                        icon: "globe",
-                        action: viewModel.openCloudflareDashboard
-                    )
-                    .accessibilityLabel("Cloudflare Dashboard")
-                    .accessibilityHint("Opens Cloudflare Dashboard in your browser")
-
-                    SettingsLink(
-                        title: "GitHub",
-                        description: "View cloudflared source code",
-                        icon: "chevron.left.forwardslash.chevron.right",
-                        action: viewModel.openGitHub
-                    )
-                    .accessibilityLabel("GitHub")
-                    .accessibilityHint("Opens cloudflared GitHub repository in your browser")
-
-                    SettingsLink(
-                        title: "Support",
-                        description: "Get help with Cloudflare",
-                        icon: "questionmark.circle",
-                        action: viewModel.openSupport
-                    )
-                    .accessibilityLabel("Support")
-                    .accessibilityHint("Opens Cloudflare support page in your browser")
-                }
-            }
-        }
-    }
 }
 
 // MARK: - Settings Section
@@ -565,48 +475,6 @@ private struct SettingsPicker: View {
             .frame(width: 150)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-// MARK: - Settings Link
-
-/// A link row for external navigation.
-private struct SettingsLink: View {
-    let title: String
-    let description: String
-    let icon: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20)
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.subheadline)
-                        .foregroundStyle(.primary)
-
-                    Text(description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Image(systemName: "arrow.up.right")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.vertical, 4)
     }
 }
 

@@ -117,16 +117,8 @@ struct TunnelListView: View {
     // MARK: - Header Section
 
     private var headerSection: some View {
-        VStack(spacing: 12) {
-            // Title row with actions
-            HStack {
-                Text("Tunnels")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .accessibilityAddTraits(.isHeader)
-
-                Spacer()
-
+        PageHeader(title: "Tunnels", actions: {
+            HStack(spacing: 8) {
                 // Tunnel count
                 if !viewModel.isEmpty {
                     Text(viewModel.tunnelCountText)
@@ -161,11 +153,8 @@ struct TunnelListView: View {
                 .accessibilityLabel("Create new tunnel")
                 .accessibilityHint("Opens the tunnel creation wizard")
             }
-
-            // Last sync info with auto-refresh indicator
+        }, subtitle: {
             HStack(spacing: 6) {
-                Spacer()
-
                 // Auto-refresh indicator
                 if appState.isAutoRefreshEnabled {
                     HStack(spacing: 4) {
@@ -191,8 +180,7 @@ struct TunnelListView: View {
                         .accessibilityLabel("Last updated \(lastSync, style: .relative)")
                 }
             }
-        }
-        .padding()
+        })
     }
 
     // MARK: - Content Section

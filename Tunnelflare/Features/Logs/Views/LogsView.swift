@@ -94,61 +94,55 @@ struct LogsView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
-            Text("Logs")
-                .font(.title2)
-                .fontWeight(.semibold)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            // Streaming indicator
-            if viewModel.isStreaming {
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(.green)
-                        .frame(width: 8, height: 8)
-                    Text("Live")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityLabel("Live streaming enabled")
-            }
-
-            // Export button
-            Button(action: { Task { await viewModel.exportLogs() } }) {
-                Label("Export", systemImage: "square.and.arrow.up")
-            }
-            .disabled(!viewModel.hasLogs)
-            .accessibilityLabel("Export logs")
-            .accessibilityHint("Exports logs to a file")
-
-            // More menu
-            Menu {
-                Button(action: { viewModel.copyLogsToClipboard() }) {
-                    Label("Copy All Logs", systemImage: "doc.on.doc")
-                }
-                .disabled(!viewModel.hasLogs)
-
-                Divider()
-
-                Button(action: { Task { await viewModel.clearLogs() } }) {
-                    Label("Clear All Logs", systemImage: "trash")
-                }
-                .disabled(!viewModel.hasLogs)
-
-                if viewModel.selectedTunnelId != nil {
-                    Button(action: { Task { await viewModel.clearSelectedTunnelLogs() } }) {
-                        Label("Clear \(viewModel.selectedTunnelName) Logs", systemImage: "trash")
+        PageHeader(title: "Logs", actions: {
+            HStack(spacing: 8) {
+                // Streaming indicator
+                if viewModel.isStreaming {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(.green)
+                            .frame(width: 8, height: 8)
+                        Text("Live")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
+                    .accessibilityLabel("Live streaming enabled")
                 }
-            } label: {
-                Image(systemName: "ellipsis.circle")
+
+                // Export button
+                Button(action: { Task { await viewModel.exportLogs() } }) {
+                    Label("Export", systemImage: "square.and.arrow.up")
+                }
+                .disabled(!viewModel.hasLogs)
+                .accessibilityLabel("Export logs")
+                .accessibilityHint("Exports logs to a file")
+
+                // More menu
+                Menu {
+                    Button(action: { viewModel.copyLogsToClipboard() }) {
+                        Label("Copy All Logs", systemImage: "doc.on.doc")
+                    }
+                    .disabled(!viewModel.hasLogs)
+
+                    Divider()
+
+                    Button(action: { Task { await viewModel.clearLogs() } }) {
+                        Label("Clear All Logs", systemImage: "trash")
+                    }
+                    .disabled(!viewModel.hasLogs)
+
+                    if viewModel.selectedTunnelId != nil {
+                        Button(action: { Task { await viewModel.clearSelectedTunnelLogs() } }) {
+                            Label("Clear \(viewModel.selectedTunnelName) Logs", systemImage: "trash")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+                .accessibilityLabel("More options")
             }
-            .menuStyle(.borderlessButton)
-            .accessibilityLabel("More options")
-        }
-        .padding()
+        })
     }
 
     // MARK: - Log List View

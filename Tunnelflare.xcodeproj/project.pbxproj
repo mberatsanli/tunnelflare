@@ -78,6 +78,7 @@
 		1CC54B5B8B0470B7820EE151 /* ZoneEndpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE147E8B8AA1F8F7D16B6D7 /* ZoneEndpoints.swift */; };
 		30E87D2971638C8E18BDFEC0 /* LogFileWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD1C3B54D244B6331A167602 /* LogFileWriter.swift */; };
 		54D14025B60F02BC45EE2F3E /* Zone.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A04D1E88EA3762C09EF113 /* Zone.swift */; };
+		D49374E92F1C55750083EA99 /* PageHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D49374E82F1C55750083EA99 /* PageHeader.swift */; };
 		D73C4D1887E2BBB7F078A17F /* ZoneEndpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE147E8B8AA1F8F7D16B6D7 /* ZoneEndpoints.swift */; };
 		STORAGE001000001 /* TunnelStorageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = STORAGE002000001 /* TunnelStorageManager.swift */; };
 		STORAGE001000003 /* TunnelDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = STORAGE002000003 /* TunnelDatabase.swift */; };
@@ -168,6 +169,7 @@
 		5DE147E8B8AA1F8F7D16B6D7 /* ZoneEndpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ZoneEndpoints.swift; path = Tunnelflare/Core/API/Endpoints/ZoneEndpoints.swift; sourceTree = SOURCE_ROOT; };
 		B7A04D1E88EA3762C09EF113 /* Zone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Zone.swift; path = Tunnelflare/Core/API/Models/Zone.swift; sourceTree = SOURCE_ROOT; };
 		BD1C3B54D244B6331A167602 /* LogFileWriter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LogFileWriter.swift; sourceTree = "<group>"; };
+		D49374E82F1C55750083EA99 /* PageHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageHeader.swift; sourceTree = "<group>"; };
 		STORAGE002000001 /* TunnelStorageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelStorageManager.swift; sourceTree = "<group>"; };
 		STORAGE002000003 /* TunnelDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelDatabase.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -245,15 +247,6 @@
 				STORAGE003000001 /* Storage */,
 			);
 			path = Core;
-			sourceTree = "<group>";
-		};
-		STORAGE003000001 /* Storage */ = {
-			isa = PBXGroup;
-			children = (
-				STORAGE002000001 /* TunnelStorageManager.swift */,
-				STORAGE002000003 /* TunnelDatabase.swift */,
-			);
-			path = Storage;
 			sourceTree = "<group>";
 		};
 		5000000000000021 /* API */ = {
@@ -417,6 +410,7 @@
 		5000000000000041 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				D49374E82F1C55750083EA99 /* PageHeader.swift */,
 				2000000000000120 /* StatusIndicator.swift */,
 				2000000000000121 /* LoadingView.swift */,
 				2000000000000122 /* ErrorView.swift */,
@@ -560,6 +554,15 @@
 			path = Fixtures;
 			sourceTree = "<group>";
 		};
+		STORAGE003000001 /* Storage */ = {
+			isa = PBXGroup;
+			children = (
+				STORAGE002000001 /* TunnelStorageManager.swift */,
+				STORAGE002000003 /* TunnelDatabase.swift */,
+			);
+			path = Storage;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -692,6 +695,7 @@
 				1000000000000062 /* MenuBarView.swift in Sources */,
 				1000000000000070 /* ProcessManager.swift in Sources */,
 				1000000000000071 /* TunnelRunner.swift in Sources */,
+				D49374E92F1C55750083EA99 /* PageHeader.swift in Sources */,
 				1000000000000072 /* CloudflaredLocator.swift in Sources */,
 				1000000000000073 /* HealthMonitor.swift in Sources */,
 				1000000000000074 /* AutoReconnectService.swift in Sources */,
