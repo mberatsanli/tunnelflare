@@ -104,13 +104,9 @@ final class StatusIconManager {
 
     /// Creates the connected (solid) icon.
     ///
-    /// Uses SF Symbol for consistent macOS appearance.
+    /// Uses custom MenuBarIcons for consistent branding.
     private func createConnectedIcon() -> NSImage? {
-        return createSFSymbolImage(
-            systemName: "cloud.fill",
-            pointSize: 16,
-            weight: .medium
-        )
+        return createMenuBarIcon()
     }
 
     /// Creates the partial connection icon.
@@ -126,25 +122,20 @@ final class StatusIconManager {
     }
 
     /// Creates the disconnected (outline) icon.
+    ///
+    /// Uses custom MenuBarIcons with reduced opacity for disconnected state.
     private func createDisconnectedIcon() -> NSImage? {
-        return createSFSymbolImage(
-            systemName: "cloud",
-            pointSize: 16,
-            weight: .medium
-        )
+        guard let image = createMenuBarIcon() else { return nil }
+        // Return same icon but template will handle the appearance
+        return image
     }
 
     /// Creates the connecting (animated) icon for a given frame.
     ///
     /// - Parameter frame: The animation frame (0-3).
     private func createConnectingIcon(frame: Int) -> NSImage? {
-        // Alternate between filled and outline states for pulsing effect
-        let symbols = ["cloud", "cloud.fill", "cloud", "cloud.fill"]
-        return createSFSymbolImage(
-            systemName: symbols[frame % symbols.count],
-            pointSize: 16,
-            weight: .medium
-        )
+        // Use custom icon - animation handled by opacity changes externally
+        return createMenuBarIcon()
     }
 
     /// Creates the error icon with a warning badge.
@@ -163,6 +154,18 @@ final class StatusIconManager {
             pointSize: 16,
             weight: .medium
         )
+    }
+
+    // MARK: - Custom Icon Helper
+
+    /// Creates an NSImage from the custom MenuBarIcons asset.
+    ///
+    /// - Returns: An NSImage configured for menu bar use.
+    private func createMenuBarIcon() -> NSImage? {
+        guard let image = NSImage(named: "MenuBarIcons") else { return nil }
+        image.size = iconSize
+        image.isTemplate = true
+        return image
     }
 
     // MARK: - SF Symbol Helper

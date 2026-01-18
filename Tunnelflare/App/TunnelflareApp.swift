@@ -219,8 +219,7 @@ struct MenuBarIconLabel: View {
     @State private var isAnimating = false
 
     var body: some View {
-        Image(systemName: StatusIconManager.symbolName(for: aggregateStatus))
-            .symbolRenderingMode(.hierarchical)
+        Image("MenuBarIcons")
             .opacity(isAnimating ? 0.5 : 1.0)
             .animation(
                 aggregateStatus == .connecting
@@ -330,9 +329,10 @@ struct TunnelSettingsPlaceholder: View {
 struct AboutSettingsPlaceholder: View {
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: "cloud.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(.orange)
+            Image("TunnelIcon")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 56, height: 56)
 
             Text("Tunnelflare")
                 .font(.title2)

@@ -239,9 +239,10 @@ struct MenuBarView: View {
 
     private var loginPromptSection: some View {
         VStack(spacing: 12) {
-            Image(systemName: "cloud.fill")
-                .font(.system(size: 32))
-                .foregroundStyle(.orange)
+            Image("TunnelIcon")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 40, height: 40)
                 .accessibilityHidden(true)
 
             Text("Log in to manage your Cloudflare Tunnels")

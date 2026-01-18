@@ -103,10 +103,11 @@ struct LoginView: View {
     /// The branding section with logo and title.
     private var brandingSection: some View {
         VStack(spacing: 16) {
-            // Simple cloud icon - no glow effects
-            Image(systemName: "cloud.fill")
-                .font(.system(size: 56, weight: .light))
-                .foregroundStyle(.orange.opacity(0.9))
+            // Custom tunnel icon
+            Image("TunnelIcon")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 64, height: 64)
 
             VStack(spacing: 8) {
                 Text("Tunnelflare")
