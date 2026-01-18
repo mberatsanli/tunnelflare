@@ -79,6 +79,7 @@
 		30E87D2971638C8E18BDFEC0 /* LogFileWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD1C3B54D244B6331A167602 /* LogFileWriter.swift */; };
 		54D14025B60F02BC45EE2F3E /* Zone.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A04D1E88EA3762C09EF113 /* Zone.swift */; };
 		D49374E92F1C55750083EA99 /* PageHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D49374E82F1C55750083EA99 /* PageHeader.swift */; };
+		D49913B62F1C752A0079F957 /* CloudflaredSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D49913B52F1C752A0079F957 /* CloudflaredSetupView.swift */; };
 		D73C4D1887E2BBB7F078A17F /* ZoneEndpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE147E8B8AA1F8F7D16B6D7 /* ZoneEndpoints.swift */; };
 		STORAGE001000001 /* TunnelStorageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = STORAGE002000001 /* TunnelStorageManager.swift */; };
 		STORAGE001000003 /* TunnelDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = STORAGE002000003 /* TunnelDatabase.swift */; };
@@ -170,6 +171,7 @@
 		B7A04D1E88EA3762C09EF113 /* Zone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Zone.swift; path = Tunnelflare/Core/API/Models/Zone.swift; sourceTree = SOURCE_ROOT; };
 		BD1C3B54D244B6331A167602 /* LogFileWriter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LogFileWriter.swift; sourceTree = "<group>"; };
 		D49374E82F1C55750083EA99 /* PageHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageHeader.swift; sourceTree = "<group>"; };
+		D49913B52F1C752A0079F957 /* CloudflaredSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudflaredSetupView.swift; sourceTree = "<group>"; };
 		STORAGE002000001 /* TunnelStorageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelStorageManager.swift; sourceTree = "<group>"; };
 		STORAGE002000003 /* TunnelDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelDatabase.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -504,6 +506,7 @@
 		5000000000000066 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				D49913B52F1C752A0079F957 /* CloudflaredSetupView.swift */,
 				2000000000000051 /* LoginView.swift */,
 				2000000000000052 /* OrganizationSelectorView.swift */,
 			);
@@ -692,6 +695,7 @@
 				1000000000000052 /* OrganizationSelectorView.swift in Sources */,
 				1000000000000060 /* MenuBarController.swift in Sources */,
 				1000000000000061 /* StatusIconManager.swift in Sources */,
+				D49913B62F1C752A0079F957 /* CloudflaredSetupView.swift in Sources */,
 				1000000000000062 /* MenuBarView.swift in Sources */,
 				1000000000000070 /* ProcessManager.swift in Sources */,
 				1000000000000071 /* TunnelRunner.swift in Sources */,

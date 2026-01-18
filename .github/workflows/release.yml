@@ -1,0 +1,76 @@
+name: Build and Release
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        type: string
+
+  # Trigger on version tags
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build Tunnelflare
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Get version from tag or input
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Update version in project
+        run: |
+          cd Tunnelflare.xcodeproj
+          agvtool new-marketing-version ${{ steps.version.outputs.version }}
+          # Increment build number based on run
+          agvtool new-version -all ${{ github.run_number }}
+
+      - name: Build release
+        run: |
+          chmod +x scripts/build-release.sh
+          ./scripts/build-release.sh
+
+      - name: Get release artifact name
+        id: artifact
+        run: |
+          ARTIFACT=$(ls build/*.zip | head -1)
+          echo "path=$ARTIFACT" >> $GITHUB_OUTPUT
+          echo "name=$(basename $ARTIFACT)" >> $GITHUB_OUTPUT
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tunnelflare-${{ steps.version.outputs.version }}
+          path: build/*.zip
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ steps.artifact.outputs.path }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

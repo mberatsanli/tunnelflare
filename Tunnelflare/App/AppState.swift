@@ -36,6 +36,26 @@ import SwiftUI
 @Observable
 final class AppState {
 
+    // MARK: - Cloudflared State
+
+    /// Whether cloudflared binary is available on the system.
+    var isCloudflaredAvailable: Bool = false
+
+    /// The path to the cloudflared binary, if found.
+    var cloudflaredPath: String?
+
+    /// The version of cloudflared, if determined.
+    var cloudflaredVersion: String?
+
+    /// Whether cloudflared check is in progress.
+    var isCheckingCloudflared: Bool = false
+
+    /// Whether cloudflared installation is in progress.
+    var isInstallingCloudflared: Bool = false
+
+    /// Error message from cloudflared installation, if any.
+    var cloudflaredInstallError: String?
+
     // MARK: - Authentication State
 
     /// Whether the user is currently authenticated.
@@ -182,6 +202,112 @@ final class AppState {
     }
 
     // MARK: - Public Methods
+
+    // MARK: Cloudflared Management
+
+    /// Checks if cloudflared is available on the system.
+    func checkCloudflaredAvailability() async {
+        isCheckingCloudflared = true
+        defer { isCheckingCloudflared = false }
+
+        let locator = CloudflaredLocator(customPath: settings.customCloudflaredPath)
+
+        if let binaryURL = locator.locateBinary() {
+            cloudflaredPath = binaryURL.path
+            isCloudflaredAvailable = true
+
+            // Try to get version
+            do {
+                cloudflaredVersion = try await locator.getVersion(at: binaryURL)
+            } catch {
+                cloudflaredVersion = nil
+            }
+        } else {
+            cloudflaredPath = nil
+            cloudflaredVersion = nil
+            isCloudflaredAvailable = false
+        }
+    }
+
+    /// Installs cloudflared using Homebrew.
+    func installCloudflaredWithHomebrew() async {
+        isInstallingCloudflared = true
+        cloudflaredInstallError = nil
+
+        do {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            process.arguments = ["-c", "/opt/homebrew/bin/brew install cloudflared || /usr/local/bin/brew install cloudflared"]
+
+            let outputPipe = Pipe()
+            let errorPipe = Pipe()
+            process.standardOutput = outputPipe
+            process.standardError = errorPipe
+
+            try process.run()
+            process.waitUntilExit()
+
+            if process.terminationStatus == 0 {
+                // Installation successful, recheck availability
+                await checkCloudflaredAvailability()
+            } else {
+                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                let errorOutput = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+                cloudflaredInstallError = "Installation failed: \(errorOutput)"
+            }
+        } catch {
+            cloudflaredInstallError = "Failed to run Homebrew: \(error.localizedDescription)"
+        }
+
+        isInstallingCloudflared = false
+    }
+
+    /// Downloads and installs cloudflared directly from GitHub.
+    func installCloudflaredDirect() async {
+        isInstallingCloudflared = true
+        cloudflaredInstallError = nil
+
+        do {
+            // Determine architecture
+            #if arch(arm64)
+            let downloadURL = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-arm64"
+            #else
+            let downloadURL = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-amd64"
+            #endif
+
+            let installPath = "/usr/local/bin/cloudflared"
+
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            process.arguments = ["-c", """
+                curl -L -o /tmp/cloudflared '\(downloadURL)' && \
+                chmod +x /tmp/cloudflared && \
+                sudo mv /tmp/cloudflared '\(installPath)'
+                """]
+
+            let outputPipe = Pipe()
+            let errorPipe = Pipe()
+            process.standardOutput = outputPipe
+            process.standardError = errorPipe
+
+            try process.run()
+            process.waitUntilExit()
+
+            if process.terminationStatus == 0 {
+                await checkCloudflaredAvailability()
+            } else {
+                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                let errorOutput = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+                cloudflaredInstallError = "Installation failed: \(errorOutput)"
+            }
+        } catch {
+            cloudflaredInstallError = "Failed to download cloudflared: \(error.localizedDescription)"
+        }
+
+        isInstallingCloudflared = false
+    }
+
+    // MARK: Authentication
 
     /// Updates the authentication state after successful login.
     ///

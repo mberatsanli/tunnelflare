@@ -31,6 +31,12 @@ struct DashboardView: View {
                 minWidth: UIConstants.minWindowWidth,
                 minHeight: UIConstants.minWindowHeight
             )
+            .task {
+                // Check cloudflared availability on launch
+                if !appState.isCloudflaredAvailable && !appState.isCheckingCloudflared {
+                    await appState.checkCloudflaredAvailability()
+                }
+            }
             .onAppear {
                 viewModel.setup(appState: appState)
 
@@ -93,7 +99,13 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var mainContent: some View {
-        if appState.isAuthenticated {
+        if appState.isCheckingCloudflared {
+            // Show loading while checking cloudflared
+            CenteredLoadingView(message: "Checking cloudflared...")
+        } else if !appState.isCloudflaredAvailable {
+            // Show setup view if cloudflared is not installed
+            CloudflaredSetupView()
+        } else if appState.isAuthenticated {
             if appState.selectedOrganization == nil && appState.organizations.count > 1 {
                 // Show organization selector if multiple orgs and none selected
                 organizationSelectorView

@@ -170,6 +170,7 @@ struct CompactLogEntryView: View {
 
 // MARK: - Preview
 
+#if DEBUG
 #Preview("Log Entry - Info") {
     LogEntryView(entry: LogEntry.previewEntries[0])
         .frame(width: 600)
@@ -216,3 +217,4 @@ struct CompactLogEntryView: View {
     }
     .frame(width: 700, height: 300)
 }
+#endif

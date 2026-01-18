@@ -32,18 +32,42 @@ If you've ever managed Cloudflare Tunnels, you know the drill: open terminal, ty
 
 ## Installation
 
-You'll need:
+**Requirements:**
 - macOS 14+ (Sonoma)
-- `cloudflared` installed (`brew install cloudflared`)
 - A Cloudflare account
 
-Then either download from [Releases](https://github.com/mberatsanli/tunnelflare/releases) or build it yourself:
+### Download
+
+1. Download the latest `.zip` from [Releases](https://github.com/mberatsanli/tunnelflare/releases)
+2. Extract and drag `Tunnelflare.app` to Applications
+3. **First launch:** Right-click → Open → Open
+
+> **Note:** macOS will show a warning because the app isn't notarized. This is normal for open-source apps. Click "Open" to proceed.
+
+<details>
+<summary>Alternative: System Settings method</summary>
+
+If right-click doesn't work:
+1. Try to open the app normally (it will be blocked)
+2. Go to System Settings → Privacy & Security
+3. Scroll down and click "Open Anyway"
+</details>
+
+### Build from Source
 
 ```bash
 git clone https://github.com/mberatsanli/tunnelflare.git
 cd Tunnelflare
 open Tunnelflare.xcodeproj
 # Hit ⌘R
+```
+
+### cloudflared
+
+The app will prompt you to install `cloudflared` if it's not found. You can also install it manually:
+
+```bash
+brew install cloudflared
 ```
 
 ---
