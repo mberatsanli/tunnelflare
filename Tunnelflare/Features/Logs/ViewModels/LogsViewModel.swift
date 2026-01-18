@@ -131,16 +131,14 @@ final class LogsViewModel {
     /// - Parameter appState: The application state.
     func setup(appState: AppState) {
         self.appState = appState
-        self.logStreamManager = LogStreamManager()
 
-        // Start streaming logs if service container is available
+        // Use the ServiceContainer's logStreamManager (not a new instance!)
         if let container = appState.serviceContainer {
-            startLogStreaming(from: container)
-        }
-
-        // Load initial entries
-        Task {
-            await loadEntries()
+            Task {
+                self.logStreamManager = await container.logStreamManager
+                startLogStreaming(from: container)
+                await loadEntries()
+            }
         }
     }
 
@@ -321,10 +319,8 @@ final class LogsViewModel {
 
     /// Processes a new log line.
     private func processNewLog(_ line: String, tunnelId: String) async {
-        guard let manager = logStreamManager else { return }
-
-        // Add to the log manager
-        await manager.processLogLine(line, tunnelId: tunnelId)
+        // Note: ServiceContainer already processes logs to LogStreamManager
+        // We just need to update our local display if the entry matches filters
 
         // Check if the entry matches current filters
         if let entry = LogParser.parse(line, tunnelId: tunnelId) {

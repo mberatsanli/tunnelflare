@@ -147,14 +147,90 @@ struct LogsView: View {
 
     // MARK: - Log List View
 
+    @ViewBuilder
     private var logListView: some View {
+        if appState.settings.logDisplayMode == .terminal {
+            terminalStyleLogs
+        } else {
+            rowStyleLogs
+        }
+    }
+
+    // MARK: - Terminal Style Logs
+
+    private var terminalStyleLogs: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                Text(formattedLogText)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .id("terminal-bottom")
+            }
+            .background(Color(nsColor: .textBackgroundColor))
+            .onAppear {
+                scrollViewProxy = proxy
+            }
+            .onChange(of: viewModel.displayedEntries.count) { _, _ in
+                if viewModel.isAutoScrollEnabled {
+                    withAnimation {
+                        proxy.scrollTo("terminal-bottom", anchor: .bottom)
+                    }
+                }
+            }
+        }
+        .accessibilityLabel("Log entries in terminal mode")
+    }
+
+    /// Formats all log entries as a single string for terminal-style display.
+    private var formattedLogText: AttributedString {
+        var result = AttributedString()
+
+        for entry in viewModel.displayedEntries {
+            // Timestamp
+            var timestamp = AttributedString("[\(entry.formattedTime)] ")
+            timestamp.foregroundColor = Color.secondary
+            result.append(timestamp)
+
+            // Level
+            var level = AttributedString("[\(entry.level.rawValue.uppercased())] ")
+            level.foregroundColor = entry.level.color
+            result.append(level)
+
+            // Tunnel name (if showing all tunnels)
+            if viewModel.selectedTunnelId == nil {
+                let tunnelName = getTunnelName(for: entry.tunnelId)
+                var tunnelTag = AttributedString("[\(tunnelName)] ")
+                tunnelTag.foregroundColor = Color.orange
+                result.append(tunnelTag)
+            }
+
+            // Message
+            var message = AttributedString(entry.message + "\n")
+            message.foregroundColor = Color.primary
+            result.append(message)
+        }
+
+        return result
+    }
+
+    /// Gets the tunnel name for a given tunnel ID.
+    private func getTunnelName(for tunnelId: String) -> String {
+        appState.tunnels.first(where: { $0.id == tunnelId })?.name ?? tunnelId.prefix(8).description
+    }
+
+    // MARK: - Row Style Logs
+
+    private var rowStyleLogs: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(viewModel.displayedEntries) { entry in
                         LogEntryView(
                             entry: entry,
-                            showTunnelId: viewModel.selectedTunnelId == nil
+                            showTunnelId: viewModel.selectedTunnelId == nil,
+                            tunnelName: viewModel.selectedTunnelId == nil ? getTunnelName(for: entry.tunnelId) : nil
                         )
                         .id(entry.id)
                         .accessibilityElement(children: .combine)

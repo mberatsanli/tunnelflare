@@ -31,8 +31,11 @@ struct LogEntryView: View {
     /// The log entry to display.
     let entry: LogEntry
 
-    /// Whether to show the tunnel ID badge.
+    /// Whether to show the tunnel badge.
     var showTunnelId: Bool = false
+
+    /// Optional tunnel name to display instead of ID.
+    var tunnelName: String? = nil
 
     /// Whether the entry is currently highlighted (e.g., search match).
     var isHighlighted: Bool = false
@@ -86,12 +89,12 @@ struct LogEntryView: View {
     }
 
     private var tunnelIdBadge: some View {
-        Text(entry.tunnelId.prefix(8))
+        Text(tunnelName ?? String(entry.tunnelId.prefix(8)))
             .font(.system(.caption2, design: .monospaced))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.orange)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
-            .background(Color.gray.opacity(0.1))
+            .background(Color.orange.opacity(0.1))
             .cornerRadius(4)
     }
 
