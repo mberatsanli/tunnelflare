@@ -25,7 +25,6 @@ struct MenuBarView: View {
     // MARK: - Environment
 
     @Environment(AppState.self) private var appState
-    @Environment(\.openWindow) private var openWindow
 
     // MARK: - Properties
 
@@ -393,8 +392,7 @@ struct MenuBarView: View {
 
     private func openDashboard() {
         dismissAction()
-        openWindow(id: WindowIdentifier.dashboard)
-        NSApp.activate(ignoringOtherApps: true)
+        DashboardWindowOpener.shared.openDashboard()
     }
 
     private func openDashboardToTunnels() {
