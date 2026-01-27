@@ -53,7 +53,7 @@ actor ServiceContainer {
     let autoReconnectService: AutoReconnectService
 
     /// Log stream manager for log capture and storage.
-    let logStreamManager: LogStreamManager
+    nonisolated let logStreamManager: LogStreamManager
 
     /// Log file writer for persisting logs to disk.
     let logFileWriter: LogFileWriter
@@ -102,7 +102,7 @@ actor ServiceContainer {
         self.healthMonitor = HealthMonitor(processManager: processManager)
 
         // Create auto-reconnect service
-        self.autoReconnectService = AutoReconnectService(
+        self.autoReconnectService = AutoReconnectService.create(
             processManager: processManager,
             healthMonitor: healthMonitor,
             settings: settings
@@ -446,7 +446,8 @@ actor ServiceContainer {
     /// Starts the log processing task.
     private func startLogProcessing() {
         logProcessingTask = Task {
-            for await event in await processManager.eventStream() {
+            let stream = await processManager.eventStream()
+            for await event in stream {
                 guard !Task.isCancelled else { break }
 
                 switch event {
@@ -466,7 +467,8 @@ actor ServiceContainer {
     /// Starts the notification processing task.
     private func startNotificationProcessing() {
         notificationProcessingTask = Task {
-            for await event in await healthMonitor.eventStream() {
+            let stream = await healthMonitor.eventStream()
+            for await event in stream {
                 guard !Task.isCancelled else { break }
 
                 let tunnelId: String
@@ -502,7 +504,8 @@ extension ServiceContainer {
             // For now, we'll just forward process manager events
 
             Task {
-                for await event in await processManager.eventStream() {
+                let stream = await processManager.eventStream()
+                for await event in stream {
                     let serviceEvent: ServiceEvent
                     switch event {
                     case .tunnelStarted(let tunnelId, let pid):

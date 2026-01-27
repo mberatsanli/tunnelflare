@@ -80,9 +80,7 @@ final class Debouncer {
     ///
     /// - Parameter action: The action to execute after the delay.
     func debounce(action: @escaping () -> Void) {
-        debounce {
-            action()
-        }
+        self.debounce(action: { () async -> Void in action() })
     }
 
     /// Cancels any pending debounced action.
