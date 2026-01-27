@@ -69,14 +69,9 @@ final class DashboardViewModel {
         isLoading = true
         defer { isLoading = false }
 
-        do {
-            await appState?.refreshAllTunnels()
-            hasLoadedInitialData = true
-            error = nil
-        } catch {
-            self.error = error
-            showErrorAlert = true
-        }
+        await appState?.refreshAllTunnels()
+        hasLoadedInitialData = true
+        error = nil
     }
 
     /// Refreshes the dashboard data.
@@ -90,13 +85,8 @@ final class DashboardViewModel {
             appState?.isLoadingTunnels = false
         }
 
-        do {
-            await appState?.refreshAllTunnels()
-            error = nil
-        } catch {
-            self.error = error
-            showErrorAlert = true
-        }
+        await appState?.refreshAllTunnels()
+        error = nil
     }
 
     /// Navigates to a specific destination.

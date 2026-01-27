@@ -415,18 +415,17 @@ final class NotificationService: NSObject {
     /// Removes pending notifications for a specific tunnel.
     ///
     /// - Parameter tunnelId: The tunnel ID to remove notifications for.
-    func removePendingNotifications(for tunnelId: String) {
+    func removePendingNotifications(for tunnelId: String) async {
         let identifierPrefixes = ["disconnect-\(tunnelId)", "crash-\(tunnelId)", "reconnect-\(tunnelId)"]
 
-        notificationCenter.getPendingNotificationRequests { requests in
-            let identifiersToRemove = requests
-                .filter { request in
-                    identifierPrefixes.contains { request.identifier.hasPrefix($0) }
-                }
-                .map { $0.identifier }
+        let requests = await notificationCenter.pendingNotificationRequests()
+        let identifiersToRemove = requests
+            .filter { request in
+                identifierPrefixes.contains { request.identifier.hasPrefix($0) }
+            }
+            .map { $0.identifier }
 
-            self.notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiersToRemove)
-        }
+        notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiersToRemove)
     }
 
     /// Removes all delivered notifications.

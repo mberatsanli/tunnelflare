@@ -261,8 +261,9 @@ actor ProcessManager {
     /// Starts event streaming for a runner.
     private func startEventStreaming(for tunnelId: String, runner: TunnelRunner) {
         let task = Task {
-            for await event in await runner.eventStream() {
-                await handleRunnerEvent(event, tunnelId: tunnelId)
+            let stream = await runner.eventStream()
+            for await event in stream {
+                handleRunnerEvent(event, tunnelId: tunnelId)
             }
         }
         eventTasks[tunnelId] = task

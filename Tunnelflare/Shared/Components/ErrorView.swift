@@ -227,7 +227,7 @@ struct ErrorView: View {
                 .disabled(isRetrying)
             }
 
-            if let details = details {
+            if let _ = details {
                 Button(action: { showDetails.toggle() }) {
                     Image(systemName: showDetails ? "chevron.up" : "chevron.down")
                         .font(.caption)

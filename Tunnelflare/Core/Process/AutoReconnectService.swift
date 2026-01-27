@@ -187,7 +187,8 @@ actor AutoReconnectService {
         }
 
         monitoringTask = Task {
-            for await event in await healthMonitor.eventStream() {
+            let stream = await healthMonitor.eventStream()
+            for await event in stream {
                 await handleHealthEvent(event)
             }
         }
@@ -408,13 +409,13 @@ actor AutoReconnectService {
 // MARK: - AutoReconnectService Extensions
 
 extension AutoReconnectService {
-    /// Convenience initializer using app settings.
-    convenience init(
+    /// Creates an AutoReconnectService configured with the given app settings.
+    static func create(
         processManager: ProcessManager,
         healthMonitor: HealthMonitor,
         settings: AppSettings
-    ) {
-        self.init(
+    ) -> AutoReconnectService {
+        AutoReconnectService(
             processManager: processManager,
             healthMonitor: healthMonitor,
             configuration: Configuration.from(settings: settings)

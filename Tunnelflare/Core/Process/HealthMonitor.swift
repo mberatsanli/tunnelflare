@@ -119,8 +119,9 @@ actor HealthMonitor {
         }
 
         monitoringTask = Task {
-            for await event in await processManager.eventStream() {
-                await handleProcessEvent(event)
+            let stream = await processManager.eventStream()
+            for await event in stream {
+                handleProcessEvent(event)
             }
         }
     }

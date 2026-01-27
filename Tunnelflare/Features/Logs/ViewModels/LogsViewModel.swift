@@ -135,7 +135,7 @@ final class LogsViewModel {
         // Use the ServiceContainer's logStreamManager (not a new instance!)
         if let container = appState.serviceContainer {
             Task {
-                self.logStreamManager = await container.logStreamManager
+                self.logStreamManager = container.logStreamManager
                 startLogStreaming(from: container)
                 await loadEntries()
             }
@@ -304,7 +304,8 @@ final class LogsViewModel {
         isStreaming = true
 
         streamTask = Task {
-            for await event in await container.eventStream() {
+            let stream = await container.eventStream()
+            for await event in stream {
                 guard !Task.isCancelled else { break }
 
                 switch event {
