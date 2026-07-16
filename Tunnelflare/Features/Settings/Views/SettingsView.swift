@@ -101,9 +101,12 @@ struct SettingsView: View {
 
                 SettingsToggle(
                     title: "Automatically Check for Updates",
-                    description: "Check for new versions of Tunnelflare in the background",
+                    description: viewModel.isUpdaterConfigured
+                        ? "Check for new versions of Tunnelflare in the background"
+                        : UpdaterService.notConfiguredHelp,
                     isOn: $viewModel.automaticallyChecksForUpdates
                 )
+                .disabled(!viewModel.isUpdaterConfigured)
                 .accessibilityLabel("Automatically Check for Updates")
                 .accessibilityValue(viewModel.automaticallyChecksForUpdates ? "On" : "Off")
                 .accessibilityHint("Toggle to check for app updates automatically")
@@ -119,6 +122,11 @@ struct SettingsView: View {
                         viewModel.checkForUpdates()
                     }
                     .disabled(!viewModel.canCheckForUpdates)
+                    .help(
+                        viewModel.isUpdaterConfigured
+                            ? "Check for a new version of Tunnelflare"
+                            : UpdaterService.notConfiguredHelp
+                    )
                     .accessibilityLabel("Check for Updates")
                     .accessibilityHint("Checks for a new version of Tunnelflare now")
                 }

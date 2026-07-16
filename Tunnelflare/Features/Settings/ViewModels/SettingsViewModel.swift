@@ -48,6 +48,14 @@ final class SettingsViewModel {
 
     // MARK: - Update Settings
 
+    /// Whether Sparkle is configured with a real feed URL and signing key.
+    ///
+    /// False in local and fork builds that still carry the Info.plist
+    /// placeholders; the update UI is disabled in that state.
+    var isUpdaterConfigured: Bool {
+        UpdaterService.isConfigured
+    }
+
     /// Whether to automatically check for app updates in the background.
     var automaticallyChecksForUpdates: Bool {
         get { updaterService.automaticallyChecksForUpdates }

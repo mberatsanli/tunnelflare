@@ -306,6 +306,12 @@ struct GeneralSettingsPlaceholder: View {
 
             Section("Updates") {
                 Toggle("Automatically check for updates", isOn: $updaterService.automaticallyChecksForUpdates)
+                    .disabled(!UpdaterService.isConfigured)
+                    .help(
+                        UpdaterService.isConfigured
+                            ? "Check for new versions of Tunnelflare in the background"
+                            : UpdaterService.notConfiguredHelp
+                    )
 
                 CheckForUpdatesButton()
             }
