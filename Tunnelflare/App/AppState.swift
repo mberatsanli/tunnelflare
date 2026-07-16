@@ -192,10 +192,18 @@ final class AppState {
         quickTunnels.filter { $0.state.isRunning }.count
     }
 
+    /// Whether any quick tunnel is in an error state.
+    private var hasQuickTunnelError: Bool {
+        quickTunnels.contains { $0.state.errorMessage != nil }
+    }
+
     /// Aggregate status for the menu bar icon.
     var aggregateStatus: AggregateStatus {
         if !isAuthenticated {
             // Quick tunnels work without a Cloudflare account
+            if hasQuickTunnelError {
+                return .error
+            }
             if runningQuickTunnelCount > 0 {
                 return .connected
             }
@@ -206,12 +214,14 @@ final class AppState {
         }
 
         // Check for errors first
-        if localTunnelStates.values.contains(where: { if case .error = $0 { return true } else { return false } }) {
+        if localTunnelStates.values.contains(where: { if case .error = $0 { return true } else { return false } }) ||
+           hasQuickTunnelError {
             return .error
         }
 
         // Check for transitioning states
-        if localTunnelStates.values.contains(where: { $0.isTransitioning }) {
+        if localTunnelStates.values.contains(where: { $0.isTransitioning }) ||
+           quickTunnels.contains(where: { $0.state.isTransitioning }) {
             return .connecting
         }
 
@@ -545,6 +555,26 @@ final class AppState {
         }
     }
 
+    /// Relaunches a quick tunnel on the same port.
+    ///
+    /// Quick tunnels cannot be restarted in place — cloudflared assigns a
+    /// new random URL on every start — so the old tunnel is stopped and a
+    /// fresh one is started for the same port.
+    ///
+    /// - Parameter id: The quick tunnel ID to relaunch.
+    func relaunchQuickTunnel(id: String) async {
+        guard let port = quickTunnels.first(where: { $0.id == id })?.port else { return }
+
+        await stopQuickTunnel(id: id)
+
+        do {
+            try await startQuickTunnel(port: port)
+        } catch {
+            // Error state is surfaced via the thrown AppError's removal path;
+            // nothing further to do from a notification action
+        }
+    }
+
     /// Copies a quick tunnel's public URL to the clipboard.
     ///
     /// - Parameter id: The quick tunnel ID.
@@ -674,9 +704,12 @@ final class AppState {
         }
     }
 
-    /// Stops all running tunnels.
+    /// Stops all running tunnels, including quick tunnels.
     func stopAllTunnels() async {
         guard let container = serviceContainer else { return }
+
+        // Stop quick tunnels first (they need per-tunnel cleanup)
+        await stopAllQuickTunnels()
 
         for tunnelId in localTunnelStates.keys {
             updateLocalTunnelState(tunnelId: tunnelId, state: .stopping)
@@ -809,6 +842,12 @@ final class AppState {
     ///
     /// - Parameter tunnelId: The tunnel ID to reconnect.
     func handleReconnectFromNotification(tunnelId: String) async {
+        // Quick tunnels have no API token to reconnect with — relaunch instead
+        if QuickTunnel.isQuickTunnelId(tunnelId) {
+            await relaunchQuickTunnel(id: tunnelId)
+            return
+        }
+
         do {
             try await startTunnel(tunnelId: tunnelId)
         } catch {
@@ -820,6 +859,12 @@ final class AppState {
     ///
     /// - Parameter tunnelId: The tunnel ID to restart.
     func handleRestartFromNotification(tunnelId: String) async {
+        // Quick tunnels have no API token to restart with — relaunch instead
+        if QuickTunnel.isQuickTunnelId(tunnelId) {
+            await relaunchQuickTunnel(id: tunnelId)
+            return
+        }
+
         do {
             try await restartTunnel(tunnelId: tunnelId)
         } catch {

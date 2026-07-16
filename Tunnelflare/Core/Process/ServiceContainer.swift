@@ -553,7 +553,7 @@ extension ServiceContainer {
             // Note: In a real implementation, we would merge streams from all services
             // For now, we'll just forward process manager events
 
-            Task {
+            let forwardingTask = Task {
                 for await event in await processManager.eventStream() {
                     let serviceEvent: ServiceEvent
                     switch event {
@@ -567,11 +567,17 @@ extension ServiceContainer {
                         serviceEvent = .tunnelHealthChanged(tunnelId: tunnelId, status: status)
                     case .logReceived(let tunnelId, let line):
                         serviceEvent = .logReceived(tunnelId: tunnelId, line: line)
-                    case .quickTunnelURLDiscovered(let tunnelId, let url):
-                        serviceEvent = .quickTunnelURLDiscovered(tunnelId: tunnelId, url: url)
                     }
                     continuation.yield(serviceEvent)
                 }
+                continuation.finish()
+            }
+
+            // Tear down the forwarding task (and thereby the upstream
+            // ProcessManager subscription) when the consumer goes away,
+            // otherwise abandoned streams accumulate per subscriber.
+            continuation.onTermination = { @Sendable _ in
+                forwardingTask.cancel()
             }
         }
     }
@@ -587,7 +593,6 @@ enum ServiceEvent: Sendable {
     case reconnectScheduled(tunnelId: String, delay: TimeInterval)
     case reconnectSucceeded(tunnelId: String)
     case reconnectFailed(tunnelId: String, error: String)
-    case quickTunnelURLDiscovered(tunnelId: String, url: URL)
 }
 
 // MARK: - Tunnel Deletion Result

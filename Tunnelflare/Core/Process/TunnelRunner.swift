@@ -62,7 +62,6 @@ actor TunnelRunner {
         case outputReceived(String)
         case errorReceived(String)
         case healthChanged(HealthStatus)
-        case publicURLDiscovered(URL)
     }
 
     /// Reason for process termination.
@@ -350,7 +349,6 @@ actor TunnelRunner {
                let url = QuickTunnelURLParser.parse(line) {
                 publicURL = url
                 logger.info("Quick tunnel \(self.tunnelId) URL discovered: \(url.absoluteString)")
-                eventContinuation?.yield(.publicURLDiscovered(url))
             }
 
             // Parse health indicators from logs
@@ -363,8 +361,9 @@ actor TunnelRunner {
     /// - Parameter timeout: Maximum time to wait for the URL.
     /// - Returns: The public URL.
     /// - Throws: `CloudflaredError.quickTunnelURLTimeout` if the URL is not
-    ///   discovered in time, or `CloudflaredError.processTerminated` if the
-    ///   process exits before printing it.
+    ///   discovered in time, `CloudflaredError.processTerminated` if the
+    ///   process exits before printing it, or `CancellationError` if the
+    ///   awaiting task is cancelled.
     func waitForPublicURL(timeout: TimeInterval = QuickTunnelConstants.urlDiscoveryTimeout) async throws -> URL {
         let deadline = Date().addingTimeInterval(timeout)
 
@@ -383,7 +382,9 @@ actor TunnelRunner {
                 throw CloudflaredError.processTerminated(exitCode: 0)
             }
 
-            try? await Task.sleep(for: .milliseconds(100))
+            // Propagates CancellationError so cancellation exits promptly
+            // instead of busy-spinning until the deadline
+            try await Task.sleep(for: .milliseconds(100))
         }
 
         throw CloudflaredError.quickTunnelURLTimeout

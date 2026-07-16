@@ -92,14 +92,23 @@ enum QuickTunnelURLParser {
     /// Regex matching a trycloudflare.com URL anywhere in a log line.
     private static let urlPattern = #/https://[a-zA-Z0-9-]+\.trycloudflare\.com/#
 
+    /// Infrastructure hosts that must never be mistaken for an assigned tunnel URL.
+    ///
+    /// cloudflared talks to `api.trycloudflare.com` to register the quick
+    /// tunnel, and error log lines can contain that endpoint URL.
+    private static let excludedHosts: Set<String> = ["api.trycloudflare.com"]
+
     /// Extracts the public quick tunnel URL from a single log line.
     ///
     /// - Parameter line: A line of cloudflared output.
     /// - Returns: The trycloudflare.com URL if present, nil otherwise.
     static func parse(_ line: String) -> URL? {
-        guard let match = line.firstMatch(of: urlPattern) else {
+        guard let match = line.firstMatch(of: urlPattern),
+              let url = URL(string: String(match.output)),
+              let host = url.host(),
+              !excludedHosts.contains(host) else {
             return nil
         }
-        return URL(string: String(match.output))
+        return url
     }
 }

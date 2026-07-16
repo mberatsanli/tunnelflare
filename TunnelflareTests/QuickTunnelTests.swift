@@ -62,6 +62,14 @@ final class QuickTunnelURLParserTests: XCTestCase {
     func testReturnsNilForOtherCloudflareDomains() {
         XCTAssertNil(QuickTunnelURLParser.parse("https://dash.cloudflare.com/some/path"))
     }
+
+    func testReturnsNilForQuickTunnelAPIEndpoint() {
+        // cloudflared registers quick tunnels against api.trycloudflare.com;
+        // error lines containing that endpoint must not be mistaken for the
+        // assigned public URL
+        let line = "ERR failed to request quick Tunnel: https://api.trycloudflare.com/tunnel unreachable"
+        XCTAssertNil(QuickTunnelURLParser.parse(line))
+    }
 }
 
 // MARK: - QuickTunnel Model Tests

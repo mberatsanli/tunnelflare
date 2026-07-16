@@ -46,7 +46,6 @@ actor ProcessManager {
         case tunnelCrashed(tunnelId: String, exitCode: Int32)
         case tunnelHealthChanged(tunnelId: String, status: TunnelRunner.HealthStatus)
         case logReceived(tunnelId: String, line: String)
-        case quickTunnelURLDiscovered(tunnelId: String, url: URL)
     }
 
     // MARK: - Properties
@@ -146,11 +145,14 @@ actor ProcessManager {
     ///   is not discovered within the timeout.
     func startQuickTunnel(tunnelId: String, port: Int) async throws -> URL {
         // Check if already running
-        if let existingRunner = runners[tunnelId], await existingRunner.isRunning {
-            logger.warning("Quick tunnel \(tunnelId) is already running")
-            if let url = await existingRunner.publicURL {
+        if let existingRunner = runners[tunnelId] {
+            if await existingRunner.isRunning, let url = await existingRunner.publicURL {
+                logger.warning("Quick tunnel \(tunnelId) is already running")
                 return url
             }
+            // Stop the stale runner before replacing it so its process
+            // doesn't leak without an owner
+            await stopTunnel(tunnelId: tunnelId)
         }
 
         logger.info("Starting quick tunnel: \(tunnelId) for port \(port)")
@@ -369,9 +371,6 @@ actor ProcessManager {
 
         case .healthChanged(let status):
             yield(.tunnelHealthChanged(tunnelId: tunnelId, status: status))
-
-        case .publicURLDiscovered(let url):
-            yield(.quickTunnelURLDiscovered(tunnelId: tunnelId, url: url))
         }
     }
 }
