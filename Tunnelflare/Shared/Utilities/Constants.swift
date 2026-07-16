@@ -44,6 +44,12 @@ enum KeychainConstants {
     /// Key for storing API token.
     static let apiTokenKey = "api-token"
 
+    /// Key for storing the persisted OAuth tokens (access/refresh/expiry).
+    static let oauthTokensKey = "oauth-tokens"
+
+    /// Key for storing which authentication method the session used.
+    static let authMethodKey = "auth-method"
+
     /// Key prefix for storing tunnel tokens.
     static let tunnelTokenPrefix = "tunnel."
 
@@ -262,4 +268,81 @@ enum ExternalLinks {
 
     /// Support page.
     static let support = URL(string: "https://developers.cloudflare.com/support/")!
+}
+
+// MARK: - OAuth Configuration
+
+/// Cloudflare OAuth 2.0 (Authorization Code + PKCE) configuration.
+///
+/// Tunnelflare is a **public client**: it uses PKCE (S256) and never embeds a
+/// client secret. Every value here that cannot be independently verified from
+/// the codebase is marked with a `// TODO(...)` and must be confirmed by the
+/// app owner before shipping OAuth.
+enum OAuthConstants {
+    /// The OAuth client ID registered in the Cloudflare dashboard.
+    ///
+    /// Injected at build time from `Config/Secrets.xcconfig`
+    /// (`CF_OAUTH_CLIENT_ID` → `Info.plist` `CFOAuthClientID`). The app owner
+    /// registers a public OAuth client (Manage Account → OAuth clients) and sets
+    /// it there. `OAuthService` refuses to start the flow while the placeholder
+    /// is present. See `Config/Secrets.example.xcconfig`.
+    static let clientID = (Bundle.main.object(forInfoDictionaryKey: "CFOAuthClientID") as? String) ?? clientIDPlaceholder
+
+    /// The placeholder value used to detect an unconfigured client ID.
+    private static let clientIDPlaceholder = "REPLACE_WITH_CLOUDFLARE_OAUTH_CLIENT_ID"
+
+    /// Whether a real client ID has been configured.
+    static var isClientIDConfigured: Bool {
+        !clientID.isEmpty && clientID != clientIDPlaceholder
+    }
+
+    /// The fixed loopback port for the RFC 8252 redirect listener.
+    ///
+    /// Cloudflare's OAuth client registration rejects custom URL schemes and
+    /// requires an http/https redirect URI, so the app runs a local loopback
+    /// HTTP listener on this port to receive the authorization callback.
+    static let loopbackPort: UInt16 = 8788
+
+    /// The loopback redirect URI registered with the OAuth client.
+    ///
+    /// Must exactly match the redirect URI configured on the Cloudflare OAuth
+    /// client (host, port, and path).
+    static let redirectURI = "http://127.0.0.1:\(loopbackPort)/callback"
+
+    /// Seconds to wait for the browser callback before treating the sign-in as
+    /// cancelled.
+    static let callbackTimeout: TimeInterval = 300
+
+    /// The OAuth scopes requested at authorization time.
+    ///
+    /// These are the exact Cloudflare scope tokens the OAuth client is
+    /// registered for (dot-separated, e.g. `zone.read`). They must match the
+    /// scopes selected on the client in the dashboard, otherwise Cloudflare
+    /// returns `invalid_scope`. Omitting the `scope` parameter entirely grants
+    /// 0 permissions, so it is always sent when this is non-empty.
+    static let scopes: [String] = [
+        "argotunnel.read",
+        "argotunnel.write",
+        "dns.read",
+        "dns.write",
+        "zone.read",
+        "account-settings.read",
+        "user-details.read",
+        "openid"
+    ]
+
+    /// The scopes joined into the space-separated `scope` request parameter.
+    static var scopeString: String {
+        scopes.joined(separator: " ")
+    }
+
+    /// The authorization endpoint (Cloudflare OAuth 2.0 Authorization Code).
+    ///
+    /// Cloudflare does not expose a fetchable RFC 8414 discovery document for
+    /// third-party clients, so the endpoints are pinned here (same host Wrangler
+    /// uses). The user authenticates in the browser against this URL.
+    static let authorizationEndpoint = URL(string: "https://dash.cloudflare.com/oauth2/auth")!
+
+    /// The token endpoint used for the authorization-code exchange and refresh.
+    static let tokenEndpoint = URL(string: "https://dash.cloudflare.com/oauth2/token")!
 }

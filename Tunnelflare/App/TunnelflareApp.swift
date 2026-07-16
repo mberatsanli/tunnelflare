@@ -167,6 +167,9 @@ struct DashboardWindowContent: View {
 
     @Environment(\.openWindow) private var openWindow
 
+    /// View model used to restore a persisted session on launch.
+    @State private var authViewModel = AuthViewModel()
+
     var body: some View {
         DashboardView()
             .environment(appState)
@@ -174,6 +177,11 @@ struct DashboardWindowContent: View {
                 minWidth: UIConstants.minWindowWidth,
                 minHeight: UIConstants.minWindowHeight
             )
+            .task {
+                // Restore any persisted session (API token or OAuth) once on launch.
+                authViewModel.setAppState(appState)
+                await authViewModel.restoreSession()
+            }
             .onAppear {
                 appState.isDashboardVisible = true
                 appDelegate.appState = appState

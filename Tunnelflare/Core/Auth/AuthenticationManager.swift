@@ -52,9 +52,15 @@ actor AuthenticationManager {
     // MARK: - Types
 
     /// Authentication method used.
-    enum AuthMethod: Equatable {
+    ///
+    /// The raw value is persisted to the Keychain so `restoreSession` knows
+    /// which credential path to restore.
+    enum AuthMethod: String, Equatable {
         /// API Token authentication.
-        case apiToken
+        case apiToken = "api-token"
+
+        /// Cloudflare OAuth (Authorization Code + PKCE) authentication.
+        case oauth = "oauth"
     }
 
     /// Authentication state.
@@ -149,6 +155,35 @@ actor AuthenticationManager {
         logger.info("Attempting to restore session")
 
         do {
+            // Determine which method to restore. Fall back to API token for
+            // sessions created before the auth method was persisted.
+            let storedMethod = try await keychainManager.retrieveAuthMethod()
+
+            if storedMethod == .oauth {
+                if let tokens = try await keychainManager.retrieveOAuthTokens() {
+                    // Restore if the token is still valid, or refreshable.
+                    guard !tokens.isExpired() || tokens.refreshToken != nil else {
+                        logger.info("Stored OAuth tokens are expired with no refresh token")
+                        return false
+                    }
+
+                    logger.info("Found stored OAuth tokens, restoring session")
+
+                    authMethod = .oauth
+                    state = .authenticated(userId: "oauth-user")
+                    currentUserId = "oauth-user"
+
+                    logger.info("OAuth session restored successfully")
+                    await delegate?.authenticationManager(self, didEmit: .sessionRestored)
+                    await delegate?.authenticationManager(self, didEmit: .stateChanged(state))
+
+                    return true
+                }
+
+                logger.info("No stored OAuth tokens found")
+                return false
+            }
+
             // Check for API token
             if let apiToken = try await keychainManager.retrieveAPIToken(), !apiToken.isEmpty {
                 logger.info("Found stored API token, restoring session")
@@ -173,6 +208,47 @@ actor AuthenticationManager {
         }
     }
 
+    /// Initiates login with Cloudflare OAuth (Authorization Code + PKCE).
+    ///
+    /// Runs the interactive OAuth flow, persists the resulting tokens and the
+    /// auth method, and marks the user as authenticated.
+    ///
+    /// - Throws: ``OAuthError`` if the flow fails or is cancelled.
+    func loginWithOAuth() async throws {
+        guard state != .authenticating else {
+            logger.warning("Login already in progress")
+            return
+        }
+
+        logger.info("Starting OAuth login")
+        state = .authenticating
+        await delegate?.authenticationManager(self, didEmit: .stateChanged(state))
+
+        do {
+            // OAuthService is @MainActor; hop via the static orchestrator so no
+            // non-Sendable value crosses the actor boundary.
+            let tokens = try await OAuthService.performLogin()
+
+            try await keychainManager.saveOAuthTokens(tokens)
+            try await keychainManager.saveAuthMethod(.oauth)
+
+            authMethod = .oauth
+            state = .authenticated(userId: "oauth-user")
+            currentUserId = "oauth-user"
+
+            logger.info("OAuth login successful")
+            await delegate?.authenticationManager(self, didEmit: .authenticationSucceeded(userId: "oauth-user"))
+            await delegate?.authenticationManager(self, didEmit: .stateChanged(state))
+
+        } catch {
+            logger.error("OAuth login failed: \(error.localizedDescription)")
+            state = .unauthenticated
+            await delegate?.authenticationManager(self, didEmit: .authenticationFailed(error))
+            await delegate?.authenticationManager(self, didEmit: .stateChanged(state))
+            throw error
+        }
+    }
+
     /// Initiates login with an API token.
     ///
     /// This stores the API token and marks the user as authenticated.
@@ -193,6 +269,7 @@ actor AuthenticationManager {
         do {
             // Store the API token in Keychain
             try await keychainManager.saveAPIToken(token)
+            try await keychainManager.saveAuthMethod(.apiToken)
 
             // Mark as authenticated with API token method
             authMethod = .apiToken
@@ -248,7 +325,71 @@ actor AuthenticationManager {
             return nil
         }
 
-        return try await keychainManager.retrieveAPIToken()
+        // Resolve the effective method (fall back to stored value if unset).
+        var method = authMethod
+        if method == nil {
+            method = try? await keychainManager.retrieveAuthMethod()
+        }
+
+        switch method ?? .apiToken {
+        case .apiToken:
+            return try await keychainManager.retrieveAPIToken()
+
+        case .oauth:
+            return try await validOAuthAccessToken()
+        }
+    }
+
+    /// Returns a valid OAuth access token, refreshing it if it has expired.
+    ///
+    /// If the token is expired and cannot be refreshed, OAuth credentials are
+    /// cleared and the session is set unauthenticated so the caller sees login.
+    ///
+    /// - Returns: A currently valid access token.
+    /// - Throws: ``OAuthError`` if no tokens are stored or refresh fails.
+    private func validOAuthAccessToken() async throws -> String? {
+        guard let tokens = try await keychainManager.retrieveOAuthTokens() else {
+            await clearOAuthAndSignOut()
+            throw OAuthError.noRefreshToken
+        }
+
+        // Still valid (with leeway) — use as-is.
+        guard tokens.isExpired() else {
+            return tokens.accessToken
+        }
+
+        guard let refreshToken = tokens.refreshToken else {
+            logger.error("OAuth token expired and no refresh token is available")
+            await clearOAuthAndSignOut()
+            throw OAuthError.noRefreshToken
+        }
+
+        do {
+            let response = try await OAuthService.performRefresh(refreshToken: refreshToken)
+            let expiresAt = Date().addingTimeInterval(TimeInterval(response.expiresIn ?? 3600))
+            let refreshed = OAuthTokens(
+                accessToken: response.accessToken,
+                // Some servers omit a new refresh token; keep the existing one.
+                refreshToken: response.refreshToken ?? refreshToken,
+                expiresAt: expiresAt
+            )
+            try await keychainManager.saveOAuthTokens(refreshed)
+            logger.info("Refreshed OAuth access token")
+            return refreshed.accessToken
+        } catch {
+            logger.error("OAuth refresh failed: \(error.localizedDescription)")
+            await clearOAuthAndSignOut()
+            throw OAuthError.refreshFailed
+        }
+    }
+
+    /// Clears stored OAuth credentials and moves to the unauthenticated state.
+    private func clearOAuthAndSignOut() async {
+        try? await keychainManager.deleteOAuthTokens()
+        state = .unauthenticated
+        currentUserId = nil
+        authMethod = nil
+        await delegate?.authenticationManager(self, didEmit: .stateChanged(state))
     }
 
     /// Updates the authenticated user information.

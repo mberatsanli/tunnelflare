@@ -6,6 +6,7 @@
 //  Copyright 2026. All rights reserved.
 //
 
+import AppKit
 import Foundation
 import SwiftUI
 import os.log
@@ -121,6 +122,103 @@ final class AuthViewModel {
 
         } catch {
             logger.error("Unexpected error during API token login: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+
+        isLoading = false
+    }
+
+    /// Restores a previous session (API token or OAuth) on app launch.
+    ///
+    /// Delegates credential restoration to `AuthenticationManager`, then hydrates
+    /// `AppState` with fresh user and account info. Failures leave the user on
+    /// the login screen without surfacing an error alert.
+    func restoreSession() async {
+        guard let appState = appState, !appState.isAuthenticated, !isLoading else { return }
+
+        logger.info("Attempting to restore session from UI")
+
+        guard await authManager.restoreSession() else {
+            logger.info("No session to restore")
+            return
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            guard let token = try await authManager.getAccessToken() else {
+                logger.warning("Session restored but no access token available")
+                await authManager.logout()
+                return
+            }
+
+            let accounts = try await validateAndFetchAccounts(token: token)
+            let user = await fetchUserInfo(token: token)
+            appState.setAuthenticated(user: user, organizations: accounts)
+            logger.info("Session restored and AppState hydrated")
+        } catch {
+            // Stored credentials are stale/invalid; sign out silently.
+            logger.error("Failed to hydrate restored session: \(error.localizedDescription)")
+            await authManager.logout()
+        }
+    }
+
+    /// Initiates login with Cloudflare OAuth (Authorization Code + PKCE).
+    ///
+    /// Runs the interactive OAuth flow, then fetches user info and accounts
+    /// using the resulting access token. User cancellation is handled silently.
+    func loginWithOAuth() async {
+        guard !isLoading else { return }
+
+        logger.info("Starting OAuth login from UI")
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            // Run the interactive OAuth flow and persist the tokens.
+            try await authManager.loginWithOAuth()
+            logger.info("OAuth login successful from UI")
+
+            // The system browser stole focus during the flow; bring the app back
+            // to the foreground so its window becomes key. Without this the first
+            // click on the returning window is swallowed to activate it (SwiftUI
+            // buttons don't accept first mouse), making the org selector feel dead.
+            NSApp.activate(ignoringOtherApps: true)
+
+            // Retrieve the freshly-obtained access token for API calls.
+            guard let token = try await authManager.getAccessToken() else {
+                throw OAuthError.tokenExchangeFailed("No access token available")
+            }
+
+            // Fetch accounts and user info with the OAuth access token.
+            let accounts = try await validateAndFetchAccounts(token: token)
+            let user = await fetchUserInfo(token: token)
+
+            if let appState = appState {
+                appState.setAuthenticated(user: user, organizations: accounts)
+                logger.info("AppState updated - isAuthenticated: \(appState.isAuthenticated)")
+                logAuthenticationInfo(user: user, organizations: accounts)
+            } else {
+                logger.warning("AppState not set - UI may not update")
+            }
+
+        } catch OAuthError.userCancelled {
+            // User dismissed the sign-in sheet; not an error worth surfacing.
+            logger.info("OAuth login cancelled by user")
+
+        } catch let error as OAuthError {
+            logger.error("OAuth error during login: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+            showError = true
+
+        } catch let error as APIError {
+            logger.error("API error after OAuth login: \(error.localizedDescription)")
+            handleAPIError(error)
+
+        } catch {
+            logger.error("Unexpected error during OAuth login: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
             showError = true
         }

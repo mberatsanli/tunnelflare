@@ -40,6 +40,9 @@ struct LoginView: View {
     /// Whether the app state has been set on the view model.
     @State private var hasSetAppState = false
 
+    /// Whether the API-token fallback card is expanded.
+    @State private var showTokenLogin = false
+
     /// The actual view model to use.
     private var activeViewModel: AuthViewModel {
         viewModel ?? internalViewModel
@@ -122,8 +125,57 @@ struct LoginView: View {
         }
     }
 
-    /// The login section with API Token input - wrapped in a card.
+    /// The primary sign-in section: OAuth first, API token as a fallback.
     private var loginSection: some View {
+        VStack(spacing: 20) {
+            // Primary: Sign in with Cloudflare (OAuth + PKCE)
+            oauthButton
+
+            // Fallback: API token login, tucked into a disclosure.
+            DisclosureGroup(isExpanded: $showTokenLogin) {
+                tokenCard
+                    .padding(.top, 12)
+            } label: {
+                Text("Or use an API token")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(32)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(nsColor: .controlBackgroundColor))
+                .shadow(color: .black.opacity(0.05), radius: 10, y: 5)
+        )
+        .frame(maxWidth: 380)
+    }
+
+    /// The prominent "Sign in with Cloudflare" OAuth button.
+    private var oauthButton: some View {
+        Button(action: {
+            Task {
+                await activeViewModel.loginWithOAuth()
+            }
+        }) {
+            HStack(spacing: 8) {
+                if activeViewModel.isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                Text("Sign in with Cloudflare")
+                    .fontWeight(.medium)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.orange)
+        .controlSize(.large)
+        .disabled(activeViewModel.isLoading)
+    }
+
+    /// The API Token input card (fallback authentication).
+    private var tokenCard: some View {
         VStack(spacing: 24) {
             // API Token input
             VStack(alignment: .leading, spacing: 8) {
@@ -181,13 +233,6 @@ struct LoginView: View {
                     .foregroundColor(.secondary)
             }
         }
-        .padding(32)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(nsColor: .controlBackgroundColor))
-                .shadow(color: .black.opacity(0.05), radius: 10, y: 5)
-        )
-        .frame(maxWidth: 380)
     }
 
     /// The help section with link to create token.

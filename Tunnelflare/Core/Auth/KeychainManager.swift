@@ -353,6 +353,50 @@ extension KeychainManager {
     }
 }
 
+// MARK: - OAuth Convenience Methods
+
+extension KeychainManager {
+    /// Saves the OAuth tokens (access/refresh/expiry) to the Keychain.
+    ///
+    /// - Parameter tokens: The OAuth tokens to persist.
+    func saveOAuthTokens(_ tokens: OAuthTokens) throws {
+        let data = try JSONEncoder().encode(tokens)
+        try save(data, for: KeychainConstants.oauthTokensKey)
+    }
+
+    /// Retrieves the persisted OAuth tokens from the Keychain.
+    ///
+    /// - Returns: The stored ``OAuthTokens``, or `nil` if none are stored.
+    func retrieveOAuthTokens() throws -> OAuthTokens? {
+        guard let data = try retrieve(for: KeychainConstants.oauthTokensKey) else {
+            return nil
+        }
+        return try JSONDecoder().decode(OAuthTokens.self, from: data)
+    }
+
+    /// Deletes the persisted OAuth tokens from the Keychain.
+    func deleteOAuthTokens() throws {
+        try delete(for: KeychainConstants.oauthTokensKey)
+    }
+
+    /// Persists which authentication method the current session used.
+    ///
+    /// - Parameter method: The authentication method to store.
+    func saveAuthMethod(_ method: AuthenticationManager.AuthMethod) throws {
+        try save(method.rawValue, for: KeychainConstants.authMethodKey)
+    }
+
+    /// Retrieves the persisted authentication method.
+    ///
+    /// - Returns: The stored method, or `nil` if none is stored/recognized.
+    func retrieveAuthMethod() throws -> AuthenticationManager.AuthMethod? {
+        guard let raw = try retrieveString(for: KeychainConstants.authMethodKey) else {
+            return nil
+        }
+        return AuthenticationManager.AuthMethod(rawValue: raw)
+    }
+}
+
 // MARK: - Tunnel Token Convenience Methods
 
 extension KeychainManager {

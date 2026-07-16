@@ -1,6 +1,80 @@
 # How to Use Tunnelflare
 
-## 1. Getting Your API Token
+Tunnelflare supports two ways to sign in:
+
+- **Sign in with Cloudflare (OAuth)** — browser-based login, no token to copy/paste. Recommended. See [section 1](#1-signing-in-with-cloudflare-oauth).
+- **API Token** — paste a token you create manually. Good for headless/CI or as a fallback. See [section 2](#2-getting-your-api-token).
+
+---
+
+## 1. Signing in with Cloudflare (OAuth)
+
+OAuth (PKCE) lets you authorize Tunnelflare in your browser without ever pasting a long-lived token.
+
+### One-time setup: register the OAuth client
+
+OAuth needs a **Client ID** that identifies the app. Register it once in the Cloudflare dashboard:
+
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com) → your account → **Manage Account** → **OAuth clients**
+2. Click **Create client**
+3. Fill in:
+   - **Client name:** `Tunnelflare`
+   - **Grant type:** Authorization Code
+   - **Response type:** Code
+   - **Token endpoint auth method:** **None** (public client — uses PKCE, no client secret)
+   - **Redirect URI:** `http://127.0.0.1:8788/callback`
+     > Cloudflare requires an `http`/`https` redirect and rejects custom schemes, so Tunnelflare uses a local loopback listener (RFC 8252). The port `8788` must match `OAuthConstants.loopbackPort` in the code.
+4. Select the **scopes** below, then **Create client**
+5. Copy the **Client ID** (there is no secret for a public client)
+
+### Scopes to select
+
+Select these scopes on the client (the exact scope tokens, shown in parentheses, are what the app requests):
+
+| Group | Scope | Token |
+|-------|-------|-------|
+| Cloudflare One / Zero Trust | Cloudflare Tunnel Read | `argotunnel.read` |
+| Cloudflare One / Zero Trust | Cloudflare Tunnel Write | `argotunnel.write` |
+| DNS & Zones | DNS Read | `dns.read` |
+| DNS & Zones | DNS Write | `dns.write` |
+| DNS & Zones | Zone Read | `zone.read` |
+| Account & Billing | Account Settings Read | `account-settings.read` |
+| Account & Billing | User Details Read | `user-details.read` |
+| Other | openid | `openid` |
+
+> These exact tokens are pinned in `OAuthConstants.scopes` (`Constants.swift`). The scope selection on the OAuth client MUST include all of them, or Cloudflare returns `invalid_scope`. Omitting the scope grants 0 permissions, so the app always sends them explicitly.
+
+### Endpoints
+
+The app talks to Cloudflare's OAuth endpoints directly (Cloudflare does not publish a fetchable discovery document for third-party clients):
+
+- Authorize: `https://dash.cloudflare.com/oauth2/auth`
+- Token: `https://dash.cloudflare.com/oauth2/token`
+
+### Configure the build
+
+The Client ID is baked into the app. In `Tunnelflare/Shared/Utilities/Constants.swift`, set:
+
+```swift
+enum OAuthConstants {
+    static let clientID = "YOUR_CLIENT_ID_HERE"   // TODO(client-id)
+    // Also confirm TODO(scopes) and TODO(verify-host) in the same block.
+}
+```
+
+Until this is set, the **Sign in with Cloudflare** button shows *"OAuth is not configured"*.
+
+### Signing in
+
+1. Open Tunnelflare → login screen
+2. Click **Sign in with Cloudflare**
+3. Your browser opens Cloudflare's consent page → approve
+4. The browser redirects to the local listener and you can close the tab
+5. Back in the app you're signed in (tokens are stored in Keychain and auto-refreshed)
+
+---
+
+## 2. Getting Your API Token
 
 Tunnelflare needs a Cloudflare API token to work. Here's how to create one:
 
@@ -25,18 +99,17 @@ Tunnelflare needs a Cloudflare API token to work. Here's how to create one:
 
 ---
 
-## 2. First Launch
+## 3. First Launch
 
 1. Open Tunnelflare
 2. You'll see the login screen
-3. Paste your API token
-4. Click **Sign In**
-5. If you have multiple accounts, pick one
-6. Done — your tunnels will load
+3. Either click **Sign in with Cloudflare** (OAuth) or expand **Or use an API token** and paste your token
+4. If you have multiple accounts, pick one
+5. Done — your tunnels will load
 
 ---
 
-## 3. Creating a Tunnel
+## 4. Creating a Tunnel
 
 1. Click the **+** button in the dashboard (or `⌘N`)
 2. Enter a name for your tunnel
@@ -50,7 +123,7 @@ Tunnelflare needs a Cloudflare API token to work. Here's how to create one:
 
 ---
 
-## 4. Starting a Tunnel
+## 5. Starting a Tunnel
 
 ### From Menu Bar
 - Click the Tunnelflare icon in menu bar
@@ -69,7 +142,7 @@ The status indicator will turn:
 
 ---
 
-## 5. Viewing Logs
+## 6. Viewing Logs
 
 Real-time logs help you debug connection issues.
 
@@ -86,7 +159,7 @@ Logs are also saved to `~/.tunnelflare/logs/` if you enable persistent logging i
 
 ---
 
-## 6. Stopping a Tunnel
+## 7. Stopping a Tunnel
 
 ### From Menu Bar
 - Click the Tunnelflare icon
@@ -103,7 +176,7 @@ Logs are also saved to `~/.tunnelflare/logs/` if you enable persistent logging i
 
 ---
 
-## 7. Deleting a Tunnel
+## 8. Deleting a Tunnel
 
 > **Warning:** This permanently deletes the tunnel from Cloudflare. Any DNS routes pointing to it will break.
 
@@ -115,7 +188,7 @@ Logs are also saved to `~/.tunnelflare/logs/` if you enable persistent logging i
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 ### "cloudflared not found"
 Install it with Homebrew:
@@ -130,6 +203,12 @@ Or set a custom path in **Settings → cloudflared Path**
 2. Check the logs for errors
 3. Make sure the tunnel has a valid config in Cloudflare dashboard
 4. Try restarting the tunnel
+
+### "OAuth is not configured"
+The build's OAuth Client ID hasn't been set. Register an OAuth client (see [section 1](#1-signing-in-with-cloudflare-oauth)) and set `OAuthConstants.clientID` in `Constants.swift`. Or just use an API token instead.
+
+### OAuth browser opens but sign-in never completes
+The loopback listener on `127.0.0.1:8788` may be blocked or the port is in use. Make sure the redirect URI registered in Cloudflare is exactly `http://127.0.0.1:8788/callback` and nothing else is using port `8788`.
 
 ### Token expired or invalid
 1. Go to **Settings**

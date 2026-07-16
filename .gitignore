@@ -33,3 +33,6 @@ fastlane/test_output
 
 # Code Injection
 iOSInjectionProject/
+
+# Local secrets (xcconfig) — keep example tracked
+Config/Secrets.xcconfig
