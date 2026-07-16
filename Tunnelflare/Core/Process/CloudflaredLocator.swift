@@ -237,6 +237,7 @@ enum CloudflaredError: Error, LocalizedError {
     case versionCheckFailed
     case startFailed(String)
     case processTerminated(exitCode: Int32)
+    case quickTunnelURLTimeout
 
     var errorDescription: String? {
         switch self {
@@ -248,6 +249,8 @@ enum CloudflaredError: Error, LocalizedError {
             return "Failed to start cloudflared: \(reason)"
         case .processTerminated(let exitCode):
             return "cloudflared process terminated with exit code \(exitCode)"
+        case .quickTunnelURLTimeout:
+            return "Timed out waiting for the trycloudflare.com URL. Check your network connection and try again."
         }
     }
 }

@@ -56,6 +56,13 @@ struct MenuBarView: View {
                 Divider()
                     .padding(.horizontal, 8)
 
+                // Quick tunnels (trycloudflare.com)
+                QuickShareSection()
+                    .padding(.vertical, 4)
+
+                Divider()
+                    .padding(.horizontal, 8)
+
                 // Quick actions
                 quickActionsSection
                     .padding(.vertical, 4)
@@ -66,6 +73,13 @@ struct MenuBarView: View {
                 // Login prompt
                 loginPromptSection
                     .padding(.vertical, 8)
+
+                Divider()
+                    .padding(.horizontal, 8)
+
+                // Quick tunnels work without a Cloudflare account
+                QuickShareSection()
+                    .padding(.vertical, 4)
 
                 Divider()
                     .padding(.horizontal, 8)

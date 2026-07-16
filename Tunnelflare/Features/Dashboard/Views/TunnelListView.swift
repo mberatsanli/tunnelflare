@@ -187,6 +187,14 @@ struct TunnelListView: View {
 
     @ViewBuilder
     private var contentSection: some View {
+        // Quick tunnels are ephemeral (not part of the API tunnel list),
+        // so they render in their own section above the named tunnels.
+        QuickTunnelSectionView()
+
+        if !appState.quickTunnels.isEmpty {
+            Divider()
+        }
+
         if viewModel.isLoading && !viewModel.hasLoaded {
             loadingView
                 .transition(.opacity)

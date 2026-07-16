@@ -191,6 +191,10 @@ actor HealthMonitor {
 
         case .logReceived(let tunnelId, let line):
             parseLogLine(tunnelId, line: line)
+
+        case .quickTunnelURLDiscovered:
+            // Informational only — health is tracked via the other events
+            break
         }
     }
 

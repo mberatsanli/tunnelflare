@@ -96,14 +96,22 @@ final class LogsViewModel {
             options += tunnels.map { TunnelOption(id: $0.id, name: $0.name) }
         }
 
+        if let quickTunnels = appState?.quickTunnels {
+            options += quickTunnels.map { TunnelOption(id: $0.id, name: $0.displayName) }
+        }
+
         return options
     }
 
     /// The name of the currently selected tunnel.
     var selectedTunnelName: String {
-        if let tunnelId = selectedTunnelId,
-           let tunnel = appState?.tunnels.first(where: { $0.id == tunnelId }) {
-            return tunnel.name
+        if let tunnelId = selectedTunnelId {
+            if let tunnel = appState?.tunnels.first(where: { $0.id == tunnelId }) {
+                return tunnel.name
+            }
+            if let quickTunnel = appState?.quickTunnels.first(where: { $0.id == tunnelId }) {
+                return quickTunnel.displayName
+            }
         }
         return "All Tunnels"
     }

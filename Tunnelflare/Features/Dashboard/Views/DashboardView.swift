@@ -332,20 +332,7 @@ struct DashboardView: View {
 
     /// Initializes the ServiceContainer for tunnel operations.
     private func initializeServiceContainer() async {
-        let apiClient = CloudflareAPIClient(authManager: .shared)
-        let container = await ServiceContainer.create(
-            apiClient: apiClient,
-            settings: appState.settings
-        )
-
-        // Start all services
-        await container.startAll()
-
-        // Assign to appState
-        appState.serviceContainer = container
-
-        // Register tunnel names for notifications
-        await appState.registerTunnelNamesWithService()
+        await appState.ensureServiceContainer()
     }
 }
 

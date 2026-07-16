@@ -6,6 +6,7 @@
 //  Copyright 2026. All rights reserved.
 //
 
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -100,6 +101,17 @@ final class AppState {
     /// The auto-refresh task.
     private var autoRefreshTask: Task<Void, Never>?
 
+    // MARK: - Quick Tunnel State
+
+    /// Active quick tunnels (ephemeral trycloudflare.com tunnels).
+    ///
+    /// Quick tunnels are NOT part of the Cloudflare API tunnel list — they
+    /// exist only while their local cloudflared process is running.
+    var quickTunnels: [QuickTunnel] = []
+
+    /// Task observing process manager events for quick tunnel state updates.
+    private var quickTunnelEventTask: Task<Void, Never>?
+
     // MARK: - UI State
 
     /// Whether the dashboard window is currently visible.
@@ -175,9 +187,21 @@ final class AppState {
         localTunnelStates.values.filter { $0.isRunning }.count
     }
 
+    /// Count of quick tunnels currently running.
+    var runningQuickTunnelCount: Int {
+        quickTunnels.filter { $0.state.isRunning }.count
+    }
+
     /// Aggregate status for the menu bar icon.
     var aggregateStatus: AggregateStatus {
         if !isAuthenticated {
+            // Quick tunnels work without a Cloudflare account
+            if runningQuickTunnelCount > 0 {
+                return .connected
+            }
+            if quickTunnels.contains(where: { $0.state.isTransitioning }) {
+                return .connecting
+            }
             return .unauthenticated
         }
 
@@ -191,7 +215,7 @@ final class AppState {
             return .connecting
         }
 
-        let runningCount = localRunningTunnelCount
+        let runningCount = localRunningTunnelCount + runningQuickTunnelCount
 
         // If any tunnel is running, we're connected
         if runningCount > 0 {
@@ -380,7 +404,195 @@ final class AppState {
     /// - Parameter tunnelId: The tunnel ID.
     /// - Returns: The tunnel name, or the tunnel ID if not found.
     func getTunnelName(tunnelId: String) -> String {
-        tunnels.first { $0.id == tunnelId }?.name ?? tunnelId
+        if let quickTunnel = quickTunnels.first(where: { $0.id == tunnelId }) {
+            return quickTunnel.displayName
+        }
+        return tunnels.first { $0.id == tunnelId }?.name ?? tunnelId
+    }
+
+    // MARK: - Service Container
+
+    /// Ensures the service container exists, creating and starting it if needed.
+    ///
+    /// Quick tunnels can be started from the menu bar before the dashboard
+    /// window (which normally initializes services) has ever been opened.
+    ///
+    /// - Returns: The service container.
+    @discardableResult
+    func ensureServiceContainer() async -> ServiceContainer {
+        if let container = serviceContainer {
+            return container
+        }
+
+        let apiClient = CloudflareAPIClient(authManager: .shared)
+        let container = await ServiceContainer.create(
+            apiClient: apiClient,
+            settings: settings
+        )
+
+        await container.startAll()
+        serviceContainer = container
+
+        // Register tunnel names for notifications
+        await registerTunnelNamesWithService()
+
+        // Observe process events for quick tunnel UI updates
+        startQuickTunnelEventMonitoring(container: container)
+
+        return container
+    }
+
+    // MARK: - Quick Tunnel Control Methods
+
+    /// Suggests a port for a new quick tunnel.
+    ///
+    /// Priority: a port found on the clipboard (number or URL with port),
+    /// then the last used port, then the default.
+    ///
+    /// - Returns: The suggested port number.
+    func suggestedQuickTunnelPort() -> Int {
+        // Try the clipboard first (a bare number or a URL with a port)
+        if let clipboard = NSPasteboard.general.string(forType: .string) {
+            let trimmed = clipboard.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let port = QuickTunnel.validatePort(trimmed) {
+                return port
+            }
+            if let url = URL(string: trimmed), let port = url.port {
+                return port
+            }
+        }
+
+        // Fall back to the last used port
+        let lastPort = UserDefaults.standard.integer(forKey: UserDefaultsKeys.lastQuickTunnelPort)
+        if (1...65535).contains(lastPort) {
+            return lastPort
+        }
+
+        return QuickTunnelConstants.defaultPort
+    }
+
+    /// Starts a quick tunnel sharing a local port via trycloudflare.com.
+    ///
+    /// On success the public URL is copied to the clipboard and a notification
+    /// is sent. Quick tunnels work with or without a Cloudflare account.
+    ///
+    /// - Parameter port: The local port to share.
+    /// - Returns: The started quick tunnel (with its public URL set).
+    /// - Throws: AppError if the tunnel fails to start.
+    @discardableResult
+    func startQuickTunnel(port: Int) async throws -> QuickTunnel {
+        let container = await ensureServiceContainer()
+
+        var quickTunnel = QuickTunnel(port: port)
+        quickTunnels.append(quickTunnel)
+
+        do {
+            let url = try await container.startQuickTunnel(
+                tunnelId: quickTunnel.id,
+                port: port,
+                name: quickTunnel.displayName
+            )
+
+            quickTunnel.publicURL = url
+            if let status = await container.processManager.getStatus(tunnelId: quickTunnel.id) {
+                quickTunnel.state = status
+            }
+            updateQuickTunnel(quickTunnel)
+
+            // Remember the port for next time
+            UserDefaults.standard.set(port, forKey: UserDefaultsKeys.lastQuickTunnelPort)
+
+            // Copy the URL to the clipboard
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(url.absoluteString, forType: .string)
+
+            // Notify the user
+            await container.notificationService.sendQuickTunnelReadyNotification(
+                tunnelId: quickTunnel.id,
+                tunnelName: quickTunnel.displayName,
+                url: url
+            )
+
+            return quickTunnel
+        } catch {
+            quickTunnels.removeAll { $0.id == quickTunnel.id }
+            throw AppError.from(error)
+        }
+    }
+
+    /// Stops a quick tunnel and removes it from the active list.
+    ///
+    /// - Parameter id: The quick tunnel ID.
+    func stopQuickTunnel(id: String) async {
+        guard let container = serviceContainer else {
+            quickTunnels.removeAll { $0.id == id }
+            return
+        }
+
+        if var quickTunnel = quickTunnels.first(where: { $0.id == id }) {
+            quickTunnel.state = .stopping
+            updateQuickTunnel(quickTunnel)
+        }
+
+        await container.stopQuickTunnel(tunnelId: id)
+        quickTunnels.removeAll { $0.id == id }
+    }
+
+    /// Stops all running quick tunnels.
+    func stopAllQuickTunnels() async {
+        for quickTunnel in quickTunnels {
+            await stopQuickTunnel(id: quickTunnel.id)
+        }
+    }
+
+    /// Copies a quick tunnel's public URL to the clipboard.
+    ///
+    /// - Parameter id: The quick tunnel ID.
+    func copyQuickTunnelURL(id: String) {
+        guard let url = quickTunnels.first(where: { $0.id == id })?.publicURL else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.absoluteString, forType: .string)
+    }
+
+    /// Starts observing process manager events for quick tunnel state changes.
+    ///
+    /// Keeps `quickTunnels` in sync when a quick tunnel process exits or
+    /// crashes outside of an explicit stop request.
+    ///
+    /// - Parameter container: The service container to observe.
+    private func startQuickTunnelEventMonitoring(container: ServiceContainer) {
+        quickTunnelEventTask?.cancel()
+
+        quickTunnelEventTask = Task { [weak self] in
+            let stream = await container.processManager.eventStream()
+            for await event in stream {
+                guard !Task.isCancelled else { break }
+                guard let self else { break }
+
+                switch event {
+                case .tunnelStopped(let tunnelId) where QuickTunnel.isQuickTunnelId(tunnelId):
+                    // Quick tunnels are ephemeral: a stopped tunnel is gone for good
+                    self.quickTunnels.removeAll { $0.id == tunnelId }
+
+                case .tunnelCrashed(let tunnelId, let exitCode) where QuickTunnel.isQuickTunnelId(tunnelId):
+                    if var quickTunnel = self.quickTunnels.first(where: { $0.id == tunnelId }) {
+                        quickTunnel.state = .error("Process crashed with exit code \(exitCode)")
+                        self.updateQuickTunnel(quickTunnel)
+                    }
+
+                default:
+                    break
+                }
+            }
+        }
+    }
+
+    /// Replaces a quick tunnel in the list with an updated copy.
+    ///
+    /// - Parameter quickTunnel: The updated quick tunnel.
+    private func updateQuickTunnel(_ quickTunnel: QuickTunnel) {
+        guard let index = quickTunnels.firstIndex(where: { $0.id == quickTunnel.id }) else { return }
+        quickTunnels[index] = quickTunnel
     }
 
     // MARK: - Tunnel Control Methods
