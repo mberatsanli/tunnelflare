@@ -30,6 +30,9 @@
 		1000000000000033 /* Tunnel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000033 /* Tunnel.swift */; };
 		1000000000000034 /* Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000034 /* Connection.swift */; };
 		1000000000000035 /* IngressRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000035 /* IngressRule.swift */; };
+		1000000000000028 /* IngressRuleValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000028 /* IngressRuleValidator.swift */; };
+		1000000000000097 /* IngressEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000097 /* IngressEditorView.swift */; };
+		1000000000000098 /* IngressEditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000098 /* IngressEditorViewModel.swift */; };
 		1000000000000040 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000040 /* AuthenticationManager.swift */; };
 		1000000000000041 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000041 /* KeychainManager.swift */; };
 		10000000000000A1 /* PKCE.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000A1 /* PKCE.swift */; };
@@ -83,7 +86,8 @@
 		1100000000000005 /* KeychainManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2100000000000005 /* KeychainManagerTests.swift */; };
 		1100000000000006 /* PKCETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2100000000000006 /* PKCETests.swift */; };
 		1100000000000007 /* OAuthKeychainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2100000000000007 /* OAuthKeychainTests.swift */; };
-		1100000000000008 /* LocalServiceScannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2100000000000008 /* LocalServiceScannerTests.swift */; };
+		1100000000000008 /* IngressRuleValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2100000000000008 /* IngressRuleValidatorTests.swift */; };
+		1100000000000009 /* LocalServiceScannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2100000000000009 /* LocalServiceScannerTests.swift */; };
 		134F48F3ABA0C8986337B315 /* Zone.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A04D1E88EA3762C09EF113 /* Zone.swift */; };
 		1CC54B5B8B0470B7820EE151 /* ZoneEndpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE147E8B8AA1F8F7D16B6D7 /* ZoneEndpoints.swift */; };
 		30E87D2971638C8E18BDFEC0 /* LogFileWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD1C3B54D244B6331A167602 /* LogFileWriter.swift */; };
@@ -129,6 +133,9 @@
 		2000000000000033 /* Tunnel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tunnel.swift; sourceTree = "<group>"; };
 		2000000000000034 /* Connection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Connection.swift; sourceTree = "<group>"; };
 		2000000000000035 /* IngressRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngressRule.swift; sourceTree = "<group>"; };
+		2000000000000028 /* IngressRuleValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngressRuleValidator.swift; sourceTree = "<group>"; };
+		2000000000000097 /* IngressEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngressEditorView.swift; sourceTree = "<group>"; };
+		2000000000000098 /* IngressEditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngressEditorViewModel.swift; sourceTree = "<group>"; };
 		2000000000000040 /* AuthenticationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
 		2000000000000041 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
 		20000000000000A1 /* PKCE.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuth/PKCE.swift; sourceTree = "<group>"; };
@@ -186,7 +193,8 @@
 		2100000000000005 /* KeychainManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManagerTests.swift; sourceTree = "<group>"; };
 		2100000000000006 /* PKCETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PKCETests.swift; sourceTree = "<group>"; };
 		2100000000000007 /* OAuthKeychainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthKeychainTests.swift; sourceTree = "<group>"; };
-		2100000000000008 /* LocalServiceScannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalServiceScannerTests.swift; sourceTree = "<group>"; };
+		2100000000000008 /* IngressRuleValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngressRuleValidatorTests.swift; sourceTree = "<group>"; };
+		2100000000000009 /* LocalServiceScannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalServiceScannerTests.swift; sourceTree = "<group>"; };
 		3000000000000001 /* Tunnelflare.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tunnelflare.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3000000000000002 /* TunnelflareTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TunnelflareTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5DE147E8B8AA1F8F7D16B6D7 /* ZoneEndpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ZoneEndpoints.swift; path = Tunnelflare/Core/API/Endpoints/ZoneEndpoints.swift; sourceTree = SOURCE_ROOT; };
@@ -290,6 +298,7 @@
 				2000000000000020 /* CloudflareAPIClient.swift */,
 				2000000000000021 /* APIError.swift */,
 				2000000000000027 /* TunnelNameValidator.swift */,
+				2000000000000028 /* IngressRuleValidator.swift */,
 				5000000000000026 /* Endpoints */,
 				5000000000000027 /* Models */,
 			);
@@ -492,6 +501,7 @@
 				2000000000000092 /* TunnelListView.swift */,
 				2000000000000093 /* TunnelRowView.swift */,
 				2000000000000094 /* TunnelDetailView.swift */,
+				2000000000000097 /* IngressEditorView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -502,6 +512,7 @@
 				2000000000000091 /* DashboardViewModel.swift */,
 				2000000000000095 /* TunnelListViewModel.swift */,
 				2000000000000096 /* TunnelDetailViewModel.swift */,
+				2000000000000098 /* IngressEditorViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -583,7 +594,8 @@
 				2100000000000005 /* KeychainManagerTests.swift */,
 				2100000000000006 /* PKCETests.swift */,
 				2100000000000007 /* OAuthKeychainTests.swift */,
-				2100000000000008 /* LocalServiceScannerTests.swift */,
+				2100000000000008 /* IngressRuleValidatorTests.swift */,
+				2100000000000009 /* LocalServiceScannerTests.swift */,
 				5100000000000002 /* Fixtures */,
 			);
 			path = TunnelflareTests;
@@ -762,6 +774,7 @@
 				1000000000000033 /* Tunnel.swift in Sources */,
 				1000000000000034 /* Connection.swift in Sources */,
 				1000000000000035 /* IngressRule.swift in Sources */,
+				1000000000000028 /* IngressRuleValidator.swift in Sources */,
 				1000000000000040 /* AuthenticationManager.swift in Sources */,
 				1000000000000041 /* KeychainManager.swift in Sources */,
 				10000000000000A1 /* PKCE.swift in Sources */,
@@ -794,6 +807,8 @@
 				1000000000000094 /* TunnelDetailView.swift in Sources */,
 				1000000000000095 /* TunnelListViewModel.swift in Sources */,
 				1000000000000096 /* TunnelDetailViewModel.swift in Sources */,
+				1000000000000097 /* IngressEditorView.swift in Sources */,
+				1000000000000098 /* IngressEditorViewModel.swift in Sources */,
 				1000000000000110 /* LogsView.swift in Sources */,
 				1000000000000111 /* LogEntryView.swift in Sources */,
 				1000000000000112 /* LogFilterView.swift in Sources */,
@@ -828,7 +843,8 @@
 				1100000000000005 /* KeychainManagerTests.swift in Sources */,
 				1100000000000006 /* PKCETests.swift in Sources */,
 				1100000000000007 /* OAuthKeychainTests.swift in Sources */,
-				1100000000000008 /* LocalServiceScannerTests.swift in Sources */,
+				1100000000000008 /* IngressRuleValidatorTests.swift in Sources */,
+				1100000000000009 /* LocalServiceScannerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

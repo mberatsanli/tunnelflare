@@ -36,6 +36,9 @@ struct TunnelDetailView: View {
 
     @State private var viewModel = TunnelDetailViewModel()
 
+    /// Owned here (not by the ingress tab) so draft edits survive tab switches.
+    @State private var ingressEditorViewModel = IngressEditorViewModel()
+
     // MARK: - Body
 
     var body: some View {
@@ -406,42 +409,13 @@ struct TunnelDetailView: View {
     // MARK: - Ingress Rules Tab
 
     private var ingressRulesTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if viewModel.isLoadingConfiguration {
-                    CenteredLoadingView(message: "Loading configuration...")
-                } else if viewModel.ingressRules.isEmpty {
-                    emptyIngressRules
-                } else {
-                    LazyVStack(spacing: 1) {
-                        ForEach(Array(viewModel.ingressRules.enumerated()), id: \.element.id) { index, rule in
-                            IngressRuleRow(rule: rule, index: index)
-                        }
-                    }
-                    .background(Color(nsColor: .separatorColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-            }
-            .padding()
+        IngressEditorView(
+            tunnel: tunnel,
+            viewModel: ingressEditorViewModel,
+            preloadedConfiguration: viewModel.configuration
+        ) { savedRules in
+            viewModel.applySavedIngressRules(savedRules)
         }
-    }
-
-    private var emptyIngressRules: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "arrow.triangle.branch")
-                .font(.system(size: 32))
-                .foregroundStyle(.secondary)
-
-            Text("No Ingress Rules")
-                .font(.headline)
-
-            Text("Configure ingress rules to route traffic to your services.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
     }
 
     // MARK: - Logs Tab
@@ -1202,57 +1176,6 @@ struct ConnectionDetailRow: View {
                 Label("Copy Connection ID", systemImage: "doc.on.doc")
             }
         }
-    }
-}
-
-/// A row displaying an ingress rule.
-struct IngressRuleRow: View {
-    let rule: IngressRule
-    let index: Int
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // Rule number
-            Text("\(index + 1)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(width: 24)
-
-            // Hostname
-            VStack(alignment: .leading, spacing: 2) {
-                Text(rule.displayHostname)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(rule.isCatchAll ? .secondary : .primary)
-
-                if rule.isCatchAll {
-                    Text("Catch-all rule")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .frame(minWidth: 150, alignment: .leading)
-
-            // Arrow
-            Image(systemName: "arrow.right")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            // Service
-            HStack(spacing: 6) {
-                Image(systemName: rule.serviceType.systemImage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Text(rule.service)
-                    .font(.system(.subheadline, design: .monospaced))
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color(nsColor: .controlBackgroundColor))
     }
 }
 
