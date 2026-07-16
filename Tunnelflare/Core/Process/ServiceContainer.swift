@@ -275,6 +275,58 @@ actor ServiceContainer {
         try await processManager.restartTunnel(tunnelId: tunnelId, accountId: accountId)
     }
 
+    // MARK: - Quick Tunnel Operations
+
+    /// Starts an ephemeral quick tunnel sharing a local port via trycloudflare.com.
+    ///
+    /// Quick tunnels require no Cloudflare account: they are not registered
+    /// for auto-reconnect (cloudflared assigns a new random URL on every start,
+    /// so silently reconnecting would change the public URL under the user).
+    ///
+    /// - Parameters:
+    ///   - tunnelId: The locally generated quick tunnel ID.
+    ///   - port: The local port to share.
+    ///   - name: The display name of the quick tunnel for notifications and logs.
+    /// - Returns: The public trycloudflare.com URL.
+    /// - Throws: `CloudflaredError` if the operation fails.
+    func startQuickTunnel(tunnelId: String, port: Int, name: String) async throws -> URL {
+        // Store tunnel name for notifications
+        tunnelNames[tunnelId] = name
+
+        // Start log file (persisted per-tunnel, same as named tunnels)
+        do {
+            try await logFileWriter.startLogging(tunnelId: tunnelId)
+        } catch {
+            logger.error("Failed to start log file for quick tunnel \(tunnelId): \(error.localizedDescription)")
+        }
+
+        do {
+            return try await processManager.startQuickTunnel(tunnelId: tunnelId, port: port)
+        } catch {
+            // Clean up on failure so the ID doesn't linger
+            await logFileWriter.stopLogging(tunnelId: tunnelId)
+            tunnelNames.removeValue(forKey: tunnelId)
+            throw error
+        }
+    }
+
+    /// Stops a quick tunnel.
+    ///
+    /// - Parameter tunnelId: The quick tunnel ID.
+    func stopQuickTunnel(tunnelId: String) async {
+        // Stop the tunnel process
+        await processManager.stopTunnel(tunnelId: tunnelId)
+
+        // Stop log file
+        await logFileWriter.stopLogging(tunnelId: tunnelId)
+
+        // Remove pending notifications for this tunnel
+        await notificationService.removePendingNotifications(for: tunnelId)
+
+        // Unregister tunnel name
+        unregisterTunnelName(tunnelId: tunnelId)
+    }
+
     /// Stops all running tunnels.
     func stopAllTunnels() async {
         await processManager.stopAllTunnels()
@@ -501,7 +553,7 @@ extension ServiceContainer {
             // Note: In a real implementation, we would merge streams from all services
             // For now, we'll just forward process manager events
 
-            Task {
+            let forwardingTask = Task {
                 for await event in await processManager.eventStream() {
                     let serviceEvent: ServiceEvent
                     switch event {
@@ -518,6 +570,14 @@ extension ServiceContainer {
                     }
                     continuation.yield(serviceEvent)
                 }
+                continuation.finish()
+            }
+
+            // Tear down the forwarding task (and thereby the upstream
+            // ProcessManager subscription) when the consumer goes away,
+            // otherwise abandoned streams accumulate per subscriber.
+            continuation.onTermination = { @Sendable _ in
+                forwardingTask.cancel()
             }
         }
     }

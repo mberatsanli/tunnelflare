@@ -100,6 +100,9 @@ enum UserDefaultsKeys {
 
     /// Key for storing window frame.
     static let dashboardWindowFrame = "dashboardWindowFrame"
+
+    /// Key for storing the last port used for a quick tunnel.
+    static let lastQuickTunnelPort = "lastQuickTunnelPort"
 }
 
 // MARK: - Notification Constants
@@ -117,6 +120,9 @@ enum NotificationCategory {
 
     /// Category for authentication expired notifications.
     static let authExpired = "AUTH_EXPIRED"
+
+    /// Category for quick tunnel ready notifications.
+    static let quickTunnelReady = "QUICK_TUNNEL_READY"
 }
 
 /// Notification action identifiers.
@@ -169,6 +175,24 @@ enum CloudflaredConstants {
 
     /// Graceful shutdown timeout in seconds.
     static let gracefulShutdownTimeout: TimeInterval = 5.0
+}
+
+// MARK: - Quick Tunnel Configuration
+
+/// Quick tunnel (trycloudflare.com) configuration constants.
+enum QuickTunnelConstants {
+    /// Prefix used for locally generated quick tunnel IDs.
+    ///
+    /// Quick tunnels are ephemeral and never appear in the Cloudflare API
+    /// tunnel list, so their IDs are generated locally with this prefix to
+    /// distinguish them from API tunnel UUIDs.
+    static let idPrefix = "quick-"
+
+    /// Maximum time to wait for cloudflared to print the trycloudflare.com URL.
+    static let urlDiscoveryTimeout: TimeInterval = 30.0
+
+    /// Default port suggested when no clipboard or last-used port is available.
+    static let defaultPort = 3000
 }
 
 // MARK: - UI Constants

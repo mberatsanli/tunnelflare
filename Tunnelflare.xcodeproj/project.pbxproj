@@ -24,6 +24,9 @@
 		1000000000000025 /* UserEndpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000025 /* UserEndpoints.swift */; };
 		1000000000000026 /* TunnelEndpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000026 /* TunnelEndpoints.swift */; };
 		1000000000000027 /* TunnelNameValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000027 /* TunnelNameValidator.swift */; };
+		10000000000000C0 /* QuickTunnel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000C0 /* QuickTunnel.swift */; };
+		10000000000000C1 /* QuickShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000C1 /* QuickShareView.swift */; };
+		10000000000000C2 /* QuickTunnelSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000C2 /* QuickTunnelSectionView.swift */; };
 		1000000000000030 /* APIResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000030 /* APIResponse.swift */; };
 		1000000000000031 /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000031 /* Account.swift */; };
 		1000000000000032 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000032 /* User.swift */; };
@@ -83,6 +86,7 @@
 		1100000000000002 /* JSONFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2100000000000002 /* JSONFixtures.swift */; };
 		1100000000000003 /* APIModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2100000000000003 /* APIModelTests.swift */; };
 		1100000000000004 /* TunnelNameValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2100000000000004 /* TunnelNameValidatorTests.swift */; };
+		110000000000000A /* QuickTunnelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 210000000000000A /* QuickTunnelTests.swift */; };
 		1100000000000005 /* KeychainManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2100000000000005 /* KeychainManagerTests.swift */; };
 		1100000000000006 /* PKCETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2100000000000006 /* PKCETests.swift */; };
 		1100000000000007 /* OAuthKeychainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2100000000000007 /* OAuthKeychainTests.swift */; };
@@ -129,6 +133,9 @@
 		2000000000000025 /* UserEndpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserEndpoints.swift; sourceTree = "<group>"; };
 		2000000000000026 /* TunnelEndpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelEndpoints.swift; sourceTree = "<group>"; };
 		2000000000000027 /* TunnelNameValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelNameValidator.swift; sourceTree = "<group>"; };
+		20000000000000C0 /* QuickTunnel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickTunnel.swift; sourceTree = "<group>"; };
+		20000000000000C1 /* QuickShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickShareView.swift; sourceTree = "<group>"; };
+		20000000000000C2 /* QuickTunnelSectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickTunnelSectionView.swift; sourceTree = "<group>"; };
 		2000000000000030 /* APIResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIResponse.swift; sourceTree = "<group>"; };
 		2000000000000031 /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		2000000000000032 /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
@@ -192,6 +199,7 @@
 		2100000000000002 /* JSONFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONFixtures.swift; sourceTree = "<group>"; };
 		2100000000000003 /* APIModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModelTests.swift; sourceTree = "<group>"; };
 		2100000000000004 /* TunnelNameValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelNameValidatorTests.swift; sourceTree = "<group>"; };
+		210000000000000A /* QuickTunnelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickTunnelTests.swift; sourceTree = "<group>"; };
 		2100000000000005 /* KeychainManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManagerTests.swift; sourceTree = "<group>"; };
 		2100000000000006 /* PKCETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PKCETests.swift; sourceTree = "<group>"; };
 		2100000000000007 /* OAuthKeychainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthKeychainTests.swift; sourceTree = "<group>"; };
@@ -331,6 +339,7 @@
 				2000000000000073 /* HealthMonitor.swift */,
 				2000000000000074 /* AutoReconnectService.swift */,
 				2000000000000075 /* ServiceContainer.swift */,
+				20000000000000C0 /* QuickTunnel.swift */,
 			);
 			path = Process;
 			sourceTree = "<group>";
@@ -401,6 +410,7 @@
 				2000000000000060 /* MenuBarController.swift */,
 				2000000000000061 /* StatusIconManager.swift */,
 				2000000000000062 /* MenuBarView.swift */,
+				20000000000000C1 /* QuickShareView.swift */,
 			);
 			path = MenuBar;
 			sourceTree = "<group>";
@@ -506,6 +516,7 @@
 				2000000000000092 /* TunnelListView.swift */,
 				2000000000000093 /* TunnelRowView.swift */,
 				2000000000000094 /* TunnelDetailView.swift */,
+				20000000000000C2 /* QuickTunnelSectionView.swift */,
 				2000000000000097 /* IngressEditorView.swift */,
 			);
 			path = Views;
@@ -599,6 +610,7 @@
 				2100000000000005 /* KeychainManagerTests.swift */,
 				2100000000000006 /* PKCETests.swift */,
 				2100000000000007 /* OAuthKeychainTests.swift */,
+				210000000000000A /* QuickTunnelTests.swift */,
 				2100000000000008 /* IngressRuleValidatorTests.swift */,
 				2100000000000009 /* LocalServiceScannerTests.swift */,
 				5100000000000002 /* Fixtures */,
@@ -813,6 +825,9 @@
 				1000000000000073 /* HealthMonitor.swift in Sources */,
 				1000000000000074 /* AutoReconnectService.swift in Sources */,
 				1000000000000075 /* ServiceContainer.swift in Sources */,
+				10000000000000C0 /* QuickTunnel.swift in Sources */,
+				10000000000000C1 /* QuickShareView.swift in Sources */,
+				10000000000000C2 /* QuickTunnelSectionView.swift in Sources */,
 				1000000000000080 /* LogBuffer.swift in Sources */,
 				1000000000000081 /* LogEntry.swift in Sources */,
 				1000000000000082 /* LogParser.swift in Sources */,
@@ -863,6 +878,7 @@
 				1100000000000005 /* KeychainManagerTests.swift in Sources */,
 				1100000000000006 /* PKCETests.swift in Sources */,
 				1100000000000007 /* OAuthKeychainTests.swift in Sources */,
+				110000000000000A /* QuickTunnelTests.swift in Sources */,
 				1100000000000008 /* IngressRuleValidatorTests.swift in Sources */,
 				1100000000000009 /* LocalServiceScannerTests.swift in Sources */,
 			);

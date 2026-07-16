@@ -44,6 +44,16 @@ actor TunnelRunner {
 
     // MARK: - Types
 
+    /// How the cloudflared process is run.
+    enum Mode: Sendable {
+        /// A named tunnel authenticated with a tunnel token (`tunnel run --token`).
+        case namedTunnel(token: String)
+
+        /// An ephemeral quick tunnel proxying a local URL (`tunnel --url`).
+        /// The public trycloudflare.com URL is parsed from process output.
+        case quickTunnel(localURL: String)
+    }
+
     /// Events emitted by the tunnel runner.
     enum Event: Sendable {
         case started(pid: Int32)
@@ -76,11 +86,14 @@ actor TunnelRunner {
     /// The tunnel ID this runner manages.
     let tunnelId: String
 
-    /// The tunnel token for authentication.
-    private let token: String
+    /// The mode the cloudflared process runs in.
+    private let mode: Mode
 
     /// Path to the cloudflared binary.
     private let binaryPath: URL
+
+    /// The public trycloudflare.com URL, once discovered (quick tunnel mode only).
+    private(set) var publicURL: URL?
 
     /// The running process, if any.
     private var process: Process?
@@ -111,7 +124,7 @@ actor TunnelRunner {
 
     // MARK: - Initialization
 
-    /// Creates a new TunnelRunner.
+    /// Creates a new TunnelRunner for a named tunnel.
     ///
     /// - Parameters:
     ///   - tunnelId: The ID of the tunnel to run.
@@ -124,8 +137,29 @@ actor TunnelRunner {
         binaryPath: URL,
         gracefulShutdownTimeout: TimeInterval = CloudflaredConstants.gracefulShutdownTimeout
     ) {
+        self.init(
+            tunnelId: tunnelId,
+            mode: .namedTunnel(token: token),
+            binaryPath: binaryPath,
+            gracefulShutdownTimeout: gracefulShutdownTimeout
+        )
+    }
+
+    /// Creates a new TunnelRunner with an explicit mode.
+    ///
+    /// - Parameters:
+    ///   - tunnelId: The ID of the tunnel to run.
+    ///   - mode: How the cloudflared process should run.
+    ///   - binaryPath: The path to the cloudflared binary.
+    ///   - gracefulShutdownTimeout: Time to wait for graceful shutdown before SIGKILL.
+    init(
+        tunnelId: String,
+        mode: Mode,
+        binaryPath: URL,
+        gracefulShutdownTimeout: TimeInterval = CloudflaredConstants.gracefulShutdownTimeout
+    ) {
         self.tunnelId = tunnelId
-        self.token = token
+        self.mode = mode
         self.binaryPath = binaryPath
         self.gracefulShutdownTimeout = gracefulShutdownTimeout
     }
@@ -260,10 +294,18 @@ actor TunnelRunner {
         args.append("tunnel")
         args.append(contentsOf: CloudflaredConstants.defaultArgs)
 
-        // Add run command with token
-        args.append("run")
-        args.append("--token")
-        args.append(token)
+        switch mode {
+        case .namedTunnel(let token):
+            // Add run command with token
+            args.append("run")
+            args.append("--token")
+            args.append(token)
+
+        case .quickTunnel(let localURL):
+            // Quick tunnel mode: no run command, just the local URL to proxy
+            args.append("--url")
+            args.append(localURL)
+        }
 
         return args
     }
@@ -301,9 +343,51 @@ actor TunnelRunner {
                 eventContinuation?.yield(.outputReceived(line))
             }
 
+            // Parse the trycloudflare.com URL for quick tunnels
+            // (cloudflared prints it in a boxed banner on stderr)
+            if case .quickTunnel = mode, publicURL == nil,
+               let url = QuickTunnelURLParser.parse(line) {
+                publicURL = url
+                logger.info("Quick tunnel \(self.tunnelId) URL discovered: \(url.absoluteString)")
+            }
+
             // Parse health indicators from logs
             updateHealthFromLog(line)
         }
+    }
+
+    /// Waits for the public trycloudflare.com URL to be discovered (quick tunnel mode).
+    ///
+    /// - Parameter timeout: Maximum time to wait for the URL.
+    /// - Returns: The public URL.
+    /// - Throws: `CloudflaredError.quickTunnelURLTimeout` if the URL is not
+    ///   discovered in time, `CloudflaredError.processTerminated` if the
+    ///   process exits before printing it, or `CancellationError` if the
+    ///   awaiting task is cancelled.
+    func waitForPublicURL(timeout: TimeInterval = QuickTunnelConstants.urlDiscoveryTimeout) async throws -> URL {
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            if let url = publicURL {
+                return url
+            }
+
+            // Bail out early if the process died before printing the URL
+            if case .error = state {
+                throw CloudflaredError.processTerminated(
+                    exitCode: process?.terminationStatus ?? -1
+                )
+            }
+            if state == .stopped {
+                throw CloudflaredError.processTerminated(exitCode: 0)
+            }
+
+            // Propagates CancellationError so cancellation exits promptly
+            // instead of busy-spinning until the deadline
+            try await Task.sleep(for: .milliseconds(100))
+        }
+
+        throw CloudflaredError.quickTunnelURLTimeout
     }
 
     /// Updates health status based on log content.
@@ -311,6 +395,7 @@ actor TunnelRunner {
         let lowercasedLine = line.lowercased()
 
         if lowercasedLine.contains("connection registered") ||
+           lowercasedLine.contains("registered tunnel connection") ||
            lowercasedLine.contains("connected to") ||
            lowercasedLine.contains("tunnel is healthy") {
             if healthStatus != .connected {

@@ -65,8 +65,8 @@ actor ProcessManager {
     /// Application settings.
     private var settings: AppSettings
 
-    /// Event continuation for broadcasting events.
-    private var eventContinuation: AsyncStream<Event>.Continuation?
+    /// Event continuations for broadcasting events to all consumers.
+    private var eventContinuations: [UUID: AsyncStream<Event>.Continuation] = [:]
 
     /// Logger for process management operations.
     private let logger = Logger.process
@@ -128,7 +128,67 @@ actor ProcessManager {
         try await runner.start()
 
         if let pid = await runner.pid {
-            eventContinuation?.yield(.tunnelStarted(tunnelId: tunnelId, pid: pid))
+            yield(.tunnelStarted(tunnelId: tunnelId, pid: pid))
+        }
+    }
+
+    /// Starts an ephemeral quick tunnel sharing a local port via trycloudflare.com.
+    ///
+    /// Quick tunnels require no Cloudflare account or API token — cloudflared
+    /// assigns a random public URL which is parsed from the process output.
+    ///
+    /// - Parameters:
+    ///   - tunnelId: The locally generated quick tunnel ID.
+    ///   - port: The local port to share.
+    /// - Returns: The public trycloudflare.com URL.
+    /// - Throws: `CloudflaredError` if the process fails to start or the URL
+    ///   is not discovered within the timeout.
+    func startQuickTunnel(tunnelId: String, port: Int) async throws -> URL {
+        // Check if already running
+        if let existingRunner = runners[tunnelId] {
+            if await existingRunner.isRunning, let url = await existingRunner.publicURL {
+                logger.warning("Quick tunnel \(tunnelId) is already running")
+                return url
+            }
+            // Stop the stale runner before replacing it so its process
+            // doesn't leak without an owner
+            await stopTunnel(tunnelId: tunnelId)
+        }
+
+        logger.info("Starting quick tunnel: \(tunnelId) for port \(port)")
+
+        // Locate cloudflared binary
+        guard let binaryPath = locator.locateBinary() else {
+            throw CloudflaredError.binaryNotFound
+        }
+
+        // Create and start runner in quick tunnel mode (no token needed)
+        let runner = TunnelRunner(
+            tunnelId: tunnelId,
+            mode: .quickTunnel(localURL: "http://localhost:\(port)"),
+            binaryPath: binaryPath
+        )
+
+        // Store runner
+        runners[tunnelId] = runner
+
+        // Start event streaming
+        startEventStreaming(for: tunnelId, runner: runner)
+
+        // Start the tunnel
+        try await runner.start()
+
+        if let pid = await runner.pid {
+            yield(.tunnelStarted(tunnelId: tunnelId, pid: pid))
+        }
+
+        // Wait for cloudflared to print the trycloudflare.com URL
+        do {
+            return try await runner.waitForPublicURL()
+        } catch {
+            // Clean up the failed tunnel so it doesn't linger
+            await stopTunnel(tunnelId: tunnelId)
+            throw error
         }
     }
 
@@ -151,7 +211,7 @@ actor ProcessManager {
         // Remove runner
         runners.removeValue(forKey: tunnelId)
 
-        eventContinuation?.yield(.tunnelStopped(tunnelId: tunnelId))
+        yield(.tunnelStopped(tunnelId: tunnelId))
     }
 
     /// Restarts a tunnel by ID.
@@ -209,13 +269,31 @@ actor ProcessManager {
 
     /// Creates an async stream of process manager events.
     ///
+    /// Events are broadcast to every active stream, so multiple consumers
+    /// (log processing, UI updates) can subscribe independently.
+    ///
     /// - Returns: An async stream of `Event` values.
     func eventStream() -> AsyncStream<Event> {
-        AsyncStream { continuation in
-            self.eventContinuation = continuation
+        let id = UUID()
+        return AsyncStream { continuation in
+            self.eventContinuations[id] = continuation
             continuation.onTermination = { @Sendable _ in
-                // Cleanup if needed
+                Task {
+                    await self.removeEventContinuation(id)
+                }
             }
+        }
+    }
+
+    /// Removes an event continuation when its stream terminates.
+    private func removeEventContinuation(_ id: UUID) {
+        eventContinuations.removeValue(forKey: id)
+    }
+
+    /// Broadcasts an event to all active event streams.
+    private func yield(_ event: Event) {
+        for continuation in eventContinuations.values {
+            continuation.yield(event)
         }
     }
 
@@ -272,27 +350,27 @@ actor ProcessManager {
     private func handleRunnerEvent(_ event: TunnelRunner.Event, tunnelId: String) {
         switch event {
         case .started(let pid):
-            eventContinuation?.yield(.tunnelStarted(tunnelId: tunnelId, pid: pid))
+            yield(.tunnelStarted(tunnelId: tunnelId, pid: pid))
 
         case .stopped:
-            eventContinuation?.yield(.tunnelStopped(tunnelId: tunnelId))
+            yield(.tunnelStopped(tunnelId: tunnelId))
 
         case .terminated(let exitCode, let reason):
             if case .crashed = reason {
-                eventContinuation?.yield(.tunnelCrashed(tunnelId: tunnelId, exitCode: exitCode))
+                yield(.tunnelCrashed(tunnelId: tunnelId, exitCode: exitCode))
             } else {
-                eventContinuation?.yield(.tunnelStopped(tunnelId: tunnelId))
+                yield(.tunnelStopped(tunnelId: tunnelId))
             }
 
         case .outputReceived(let line):
-            eventContinuation?.yield(.logReceived(tunnelId: tunnelId, line: line))
+            yield(.logReceived(tunnelId: tunnelId, line: line))
 
         case .errorReceived(let line):
             // cloudflared logs to stderr, so this is normal log output
-            eventContinuation?.yield(.logReceived(tunnelId: tunnelId, line: line))
+            yield(.logReceived(tunnelId: tunnelId, line: line))
 
         case .healthChanged(let status):
-            eventContinuation?.yield(.tunnelHealthChanged(tunnelId: tunnelId, status: status))
+            yield(.tunnelHealthChanged(tunnelId: tunnelId, status: status))
         }
     }
 }

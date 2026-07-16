@@ -200,12 +200,21 @@ final class NotificationService: NSObject {
             options: []
         )
 
+        // QUICK_TUNNEL_READY category (informational only)
+        let quickTunnelReadyCategory = UNNotificationCategory(
+            identifier: NotificationCategory.quickTunnelReady,
+            actions: [],
+            intentIdentifiers: [],
+            options: []
+        )
+
         // Register all categories
         notificationCenter.setNotificationCategories([
             disconnectCategory,
             reconnectCategory,
             crashCategory,
-            authExpiredCategory
+            authExpiredCategory,
+            quickTunnelReadyCategory
         ])
 
         logger.info("Notification categories registered")
@@ -332,6 +341,42 @@ final class NotificationService: NSObject {
         )
     }
 
+    // MARK: - Quick Tunnel Ready Notification
+
+    /// Sends a notification when a quick tunnel's public URL is ready.
+    ///
+    /// This is an informational notification confirming the URL was copied
+    /// to the clipboard.
+    ///
+    /// - Parameters:
+    ///   - tunnelId: The quick tunnel ID.
+    ///   - tunnelName: The display name of the quick tunnel.
+    ///   - url: The public trycloudflare.com URL.
+    func sendQuickTunnelReadyNotification(tunnelId: String, tunnelName: String, url: URL) async {
+        guard shouldSendNotification(forCategory: .quickTunnelReady) else {
+            logger.debug("Quick tunnel ready notification suppressed by settings")
+            return
+        }
+
+        logger.info("Sending quick tunnel ready notification for: \(tunnelName)")
+
+        let content = UNMutableNotificationContent()
+        content.title = "Quick Tunnel Ready"
+        content.body = "\(url.absoluteString) copied to clipboard"
+        content.sound = .default
+        content.categoryIdentifier = NotificationCategory.quickTunnelReady
+        content.userInfo = [
+            "tunnelId": tunnelId,
+            "tunnelName": tunnelName,
+            "eventType": "quickTunnelReady"
+        ]
+
+        await scheduleNotification(
+            identifier: "quick-ready-\(tunnelId)-\(Date().timeIntervalSince1970)",
+            content: content
+        )
+    }
+
     // MARK: - Auth Expired Notification
 
     /// Sends a notification when authentication expires.
@@ -388,6 +433,9 @@ final class NotificationService: NSObject {
             return settings.notifyOnCrash
         case .authExpired:
             // Auth expired notifications are always enabled when master is on
+            return true
+        case .quickTunnelReady:
+            // Quick tunnel ready notifications are always enabled when master is on
             return true
         }
     }
@@ -499,6 +547,7 @@ private enum NotificationCategoryType {
     case reconnect
     case crash
     case authExpired
+    case quickTunnelReady
 }
 
 // MARK: - HealthMonitor Integration

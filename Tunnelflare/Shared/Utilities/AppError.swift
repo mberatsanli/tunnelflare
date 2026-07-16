@@ -440,6 +440,11 @@ extension AppError {
             return .tunnelStartFailed(tunnelId: tunnelId ?? "unknown", reason: reason)
         case .processTerminated(let exitCode):
             return .cloudflaredCrashed(tunnelId: tunnelId ?? "unknown", exitCode: exitCode)
+        case .quickTunnelURLTimeout:
+            return .tunnelStartFailed(
+                tunnelId: tunnelId ?? "unknown",
+                reason: cloudflaredError.localizedDescription
+            )
         }
     }
 
