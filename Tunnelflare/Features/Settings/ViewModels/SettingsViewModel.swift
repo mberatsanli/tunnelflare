@@ -29,6 +29,9 @@ final class SettingsViewModel {
     /// The settings manager.
     private let settingsManager = AppSettingsManager.shared
 
+    /// The in-app updater service.
+    private let updaterService = UpdaterService.shared
+
     // MARK: - General Settings
 
     /// Whether to launch the app at login.
@@ -41,6 +44,24 @@ final class SettingsViewModel {
     var showInDock: Bool {
         get { settingsManager.showInDock }
         set { settingsManager.showInDock = newValue }
+    }
+
+    // MARK: - Update Settings
+
+    /// Whether to automatically check for app updates in the background.
+    var automaticallyChecksForUpdates: Bool {
+        get { updaterService.automaticallyChecksForUpdates }
+        set { updaterService.automaticallyChecksForUpdates = newValue }
+    }
+
+    /// Whether a manual update check can be started right now.
+    var canCheckForUpdates: Bool {
+        updaterService.canCheckForUpdates
+    }
+
+    /// Starts a user-initiated update check.
+    func checkForUpdates() {
+        updaterService.checkForUpdates()
     }
 
     // MARK: - Notification Settings

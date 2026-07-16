@@ -98,6 +98,30 @@ struct SettingsView: View {
                 .accessibilityLabel("Show in Dock")
                 .accessibilityValue(viewModel.showInDock ? "On" : "Off")
                 .accessibilityHint("Toggle to show or hide the app icon in the Dock")
+
+                SettingsToggle(
+                    title: "Automatically Check for Updates",
+                    description: "Check for new versions of Tunnelflare in the background",
+                    isOn: $viewModel.automaticallyChecksForUpdates
+                )
+                .accessibilityLabel("Automatically Check for Updates")
+                .accessibilityValue(viewModel.automaticallyChecksForUpdates ? "On" : "Off")
+                .accessibilityHint("Toggle to check for app updates automatically")
+
+                HStack {
+                    Text("Version \(viewModel.appVersion)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Button("Check for Updates…") {
+                        viewModel.checkForUpdates()
+                    }
+                    .disabled(!viewModel.canCheckForUpdates)
+                    .accessibilityLabel("Check for Updates")
+                    .accessibilityHint("Checks for a new version of Tunnelflare now")
+                }
             }
         }
     }

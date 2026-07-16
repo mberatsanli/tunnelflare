@@ -38,5 +38,14 @@
 	<string></string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/mberatsanli/tunnelflare/releases/latest/download/appcast.xml</string>
+	<!-- PLACEHOLDER: replace with the EdDSA public key from Sparkle's
+	     generate_keys tool before shipping updates. See docs/RELEASING.md.
+	     The matching private key lives ONLY in CI secrets, never in the repo. -->
+	<key>SUPublicEDKey</key>
+	<string>REPLACE_WITH_SPARKLE_ED25519_PUBLIC_KEY</string>
 </dict>
 </plist>

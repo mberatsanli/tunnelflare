@@ -36,20 +36,45 @@ jobs:
           else
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
+          # Refuse anything that is not strict SemVer (MAJOR.MINOR.PATCH)
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$VERSION' is not a valid SemVer version (expected MAJOR.MINOR.PATCH, tag vX.Y.Z)"
+            exit 1
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION"
 
-      - name: Update version in project
+      - name: Stamp version into build settings
         run: |
-          cd Tunnelflare.xcodeproj
-          agvtool new-marketing-version ${{ steps.version.outputs.version }}
-          # Increment build number based on run
-          agvtool new-version -all ${{ github.run_number }}
+          VERSION="${{ steps.version.outputs.version }}"
+          # Derive the build number (CFBundleVersion, Sparkle's comparison key)
+          # from the SemVer components so it is monotonic with the version and
+          # reproducible across workflow re-runs — unlike github.run_number,
+          # which would let a re-run of an older tag outrank a newer release.
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          BUILD_NUMBER=$((MAJOR * 1000000 + MINOR * 1000 + PATCH))
+          # Config/Base.xcconfig is the single source of truth for the version.
+          sed -i '' "s/^MARKETING_VERSION = .*/MARKETING_VERSION = $VERSION/" Config/Base.xcconfig
+          sed -i '' "s/^CURRENT_PROJECT_VERSION = .*/CURRENT_PROJECT_VERSION = $BUILD_NUMBER/" Config/Base.xcconfig
+          grep -E '^(MARKETING_VERSION|CURRENT_PROJECT_VERSION)' Config/Base.xcconfig
+
+      - name: Resolve Swift package dependencies
+        run: xcodebuild -project Tunnelflare.xcodeproj -resolvePackageDependencies
 
       - name: Build release
         run: |
           chmod +x scripts/build-release.sh
           ./scripts/build-release.sh
+
+      - name: Verify built version matches tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BUILT_VERSION=$(defaults read "$PWD/build/Tunnelflare.app/Contents/Info" CFBundleShortVersionString)
+          if [ "$BUILT_VERSION" != "$VERSION" ]; then
+            echo "::error::Built app version '$BUILT_VERSION' does not match tag version '$VERSION'"
+            exit 1
+          fi
+          echo "Built version $BUILT_VERSION matches tag"
 
       - name: Get release artifact name
         id: artifact
@@ -57,6 +82,37 @@ jobs:
           ARTIFACT=$(ls build/*.zip | head -1)
           echo "path=$ARTIFACT" >> $GITHUB_OUTPUT
           echo "name=$(basename $ARTIFACT)" >> $GITHUB_OUTPUT
+
+      # Signs the release zip with the Sparkle EdDSA private key and produces
+      # appcast.xml. The private key lives ONLY in the SPARKLE_PRIVATE_KEY
+      # repository secret — see docs/RELEASING.md for setup.
+      - name: Generate Sparkle appcast
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "::warning::SPARKLE_PRIVATE_KEY secret not set — skipping appcast generation (release will not be offered as an in-app update)"
+            exit 0
+          fi
+          VERSION="${{ steps.version.outputs.version }}"
+          # Keep in sync with the Sparkle package pin in
+          # Tunnelflare.xcodeproj/project.pbxproj (XCRemoteSwiftPackageReference)
+          SPARKLE_VERSION="2.9.4"
+          curl -sSL -o /tmp/sparkle.tar.xz \
+            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          mkdir -p /tmp/sparkle-tools
+          tar -xf /tmp/sparkle.tar.xz -C /tmp/sparkle-tools
+          # Keep only the release zip in the scan directory
+          mkdir -p appcast-work
+          cp "${{ steps.artifact.outputs.path }}" appcast-work/
+          echo "$SPARKLE_PRIVATE_KEY" | /tmp/sparkle-tools/bin/generate_appcast \
+            --ed-key-file - \
+            --link "https://github.com/${{ github.repository }}/releases" \
+            --download-url-prefix "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/" \
+            -o appcast.xml \
+            appcast-work
+          cat appcast.xml
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -68,7 +124,12 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          files: ${{ steps.artifact.outputs.path }}
+          files: |
+            ${{ steps.artifact.outputs.path }}
+            appcast.xml
+          # appcast.xml is intentionally absent when SPARKLE_PRIVATE_KEY is
+          # unset — don't fail the release over the unmatched pattern.
+          fail_on_unmatched_files: false
           generate_release_notes: true
           draft: false
           prerelease: false

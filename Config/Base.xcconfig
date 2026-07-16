@@ -8,6 +8,11 @@
 //  you create it (copy Secrets.example.xcconfig and fill in your values).
 //
 
+// App version — single source of truth (SemVer). Bump these to cut a release;
+// the release workflow stamps the git tag version here and fails on mismatch.
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 1
+
 // Cloudflare OAuth client ID (public PKCE identifier). Empty by default.
 CF_OAUTH_CLIENT_ID =
 
