@@ -1,0 +1,14 @@
+//
+//  Base.xcconfig
+//  Tunnelflare
+//
+//  Shared build configuration. Local, gitignored overrides are pulled in via
+//  the optional include below — fresh clones build fine without
+//  Config/Secrets.xcconfig; OAuth login just reports "not configured" until
+//  you create it (copy Secrets.example.xcconfig and fill in your values).
+//
+
+// Cloudflare OAuth client ID (public PKCE identifier). Empty by default.
+CF_OAUTH_CLIENT_ID =
+
+#include? "Secrets.xcconfig"

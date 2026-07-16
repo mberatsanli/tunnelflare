@@ -53,16 +53,18 @@ The app talks to Cloudflare's OAuth endpoints directly (Cloudflare does not publ
 
 ### Configure the build
 
-The Client ID is baked into the app. In `Tunnelflare/Shared/Utilities/Constants.swift`, set:
+The Client ID is injected at build time from a local, gitignored xcconfig:
 
-```swift
-enum OAuthConstants {
-    static let clientID = "YOUR_CLIENT_ID_HERE"   // TODO(client-id)
-    // Also confirm TODO(scopes) and TODO(verify-host) in the same block.
-}
+```bash
+cp Config/Secrets.example.xcconfig Config/Secrets.xcconfig
+# then edit Config/Secrets.xcconfig:
+#   CF_OAUTH_CLIENT_ID = your-client-id-here
 ```
 
-Until this is set, the **Sign in with Cloudflare** button shows *"OAuth is not configured"*.
+`Config/Base.xcconfig` (tracked) optionally includes `Secrets.xcconfig`, so a
+fresh clone builds fine without it — until you create the file, the
+**Sign in with Cloudflare** button shows *"OAuth is not configured"* and you
+can use an API token instead.
 
 ### Signing in
 
