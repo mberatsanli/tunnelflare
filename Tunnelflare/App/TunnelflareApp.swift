@@ -250,6 +250,7 @@ struct MenuBarIconLabel: View {
 /// Navigation destinations for the dashboard sidebar.
 enum NavigationDestination: Hashable {
     case tunnels
+    case localServices
     case logs
     case settings
 }
