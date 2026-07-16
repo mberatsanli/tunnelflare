@@ -309,8 +309,8 @@ struct GeneralSettingsPlaceholder: View {
                     .disabled(!UpdaterService.isConfigured)
                     .help(
                         UpdaterService.isConfigured
-                            ? ""
-                            : "Updates are not configured in this build"
+                            ? "Check for new versions of Tunnelflare in the background"
+                            : UpdaterService.notConfiguredHelp
                     )
 
                 CheckForUpdatesButton()

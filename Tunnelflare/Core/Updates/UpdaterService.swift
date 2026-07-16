@@ -37,16 +37,22 @@ final class UpdaterService {
 
     // MARK: - Configuration
 
-    /// The placeholder value used to detect an unconfigured public key.
-    private static let publicEDKeyPlaceholder = "REPLACE_WITH_SPARKLE_ED25519_PUBLIC_KEY"
+    /// User-facing explanation shown wherever the update UI is disabled
+    /// because the build carries no valid Sparkle configuration.
+    static let notConfiguredHelp = "Updates are not configured in this build"
 
     /// Whether Sparkle is configured with a real feed URL and signing key.
     ///
-    /// False while `Info.plist` still carries the `SUPublicEDKey` placeholder
-    /// (or an empty feed), which is the state of local and fork builds.
+    /// Validates the key's shape rather than comparing against the
+    /// `Info.plist` placeholder text: an ed25519 public key is exactly
+    /// 32 bytes of base64. This keeps the gate closed for the placeholder
+    /// (which is not valid base64) AND for malformed real keys — a typo'd
+    /// or truncated key would otherwise start Sparkle straight into its
+    /// "The updater failed to start" error dialog.
     static let isConfigured: Bool = {
         guard let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String,
-              !key.isEmpty, key != publicEDKeyPlaceholder,
+              let keyData = Data(base64Encoded: key),
+              keyData.count == 32,
               let feed = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String,
               !feed.isEmpty
         else {
@@ -150,7 +156,7 @@ struct CheckForUpdatesButton: View {
         .help(
             UpdaterService.isConfigured
                 ? "Check for a new version of Tunnelflare"
-                : "Updates are not configured in this build"
+                : UpdaterService.notConfiguredHelp
         )
     }
 }

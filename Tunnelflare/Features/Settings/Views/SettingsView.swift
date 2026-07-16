@@ -103,7 +103,7 @@ struct SettingsView: View {
                     title: "Automatically Check for Updates",
                     description: viewModel.isUpdaterConfigured
                         ? "Check for new versions of Tunnelflare in the background"
-                        : "Updates are not configured in this build",
+                        : UpdaterService.notConfiguredHelp,
                     isOn: $viewModel.automaticallyChecksForUpdates
                 )
                 .disabled(!viewModel.isUpdaterConfigured)
@@ -125,7 +125,7 @@ struct SettingsView: View {
                     .help(
                         viewModel.isUpdaterConfigured
                             ? "Check for a new version of Tunnelflare"
-                            : "Updates are not configured in this build"
+                            : UpdaterService.notConfiguredHelp
                     )
                     .accessibilityLabel("Check for Updates")
                     .accessibilityHint("Checks for a new version of Tunnelflare now")

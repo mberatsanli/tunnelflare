@@ -403,6 +403,11 @@ struct MenuBarView: View {
                 action: checkForUpdates,
                 disabled: !UpdaterService.shared.canCheckForUpdates
             )
+            .help(
+                UpdaterService.isConfigured
+                    ? "Check for a new version of Tunnelflare"
+                    : UpdaterService.notConfiguredHelp
+            )
             .accessibilityLabel("Check for Updates")
             .accessibilityHint("Double tap to check for a new version of Tunnelflare")
 

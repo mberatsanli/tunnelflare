@@ -109,12 +109,15 @@ for manual downloads but not a stable identity for production updates:
 
 ## Unconfigured builds
 
-While `Info.plist` still carries the `SUPublicEDKey` placeholder (local dev
-builds, forks that never set up Sparkle), the updater is **never started**:
-`UpdaterService.isConfigured` is false, "Check for Updates…" is disabled
-everywhere with an "Updates are not configured in this build" tooltip, the
-automatic-checks toggle is disabled, and no background checks run. This
-avoids Sparkle's "The updater failed to start" error dialog.
+Unless `Info.plist` carries a structurally valid `SUPublicEDKey` — base64
+that decodes to exactly 32 bytes, the shape of an ed25519 public key — the
+updater is **never started**: `UpdaterService.isConfigured` is false, "Check
+for Updates…" is disabled everywhere with an "Updates are not configured in
+this build" tooltip, the automatic-checks toggle is disabled, and no
+background checks run. This covers the shipped placeholder (local dev builds,
+forks that never set up Sparkle) as well as typo'd or truncated real keys,
+and avoids Sparkle's "The updater failed to start" error dialog in both
+cases.
 
 ## Update UX
 
