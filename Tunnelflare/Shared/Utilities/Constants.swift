@@ -190,6 +190,9 @@ enum UIConstants {
     /// Maximum tunnels to show in menu bar dropdown.
     static let maxMenuBarTunnels = 5
 
+    /// Maximum local services to show in menu bar dropdown.
+    static let maxMenuBarLocalServices = 5
+
     /// Sidebar width range.
     static let sidebarMinWidth: CGFloat = 180
     static let sidebarIdealWidth: CGFloat = 200

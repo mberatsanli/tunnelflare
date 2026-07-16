@@ -35,6 +35,14 @@ struct MenuBarView: View {
     /// Maximum number of tunnels to show in the list.
     private let maxVisibleTunnels = UIConstants.maxMenuBarTunnels
 
+    /// Maximum number of local services to show in the list.
+    private let maxVisibleLocalServices = UIConstants.maxMenuBarLocalServices
+
+    // MARK: - State
+
+    /// View model for the local services section.
+    @State private var localServicesViewModel = LocalServicesViewModel()
+
     // MARK: - Body
 
     var body: some View {
@@ -51,6 +59,13 @@ struct MenuBarView: View {
             if appState.isAuthenticated {
                 // Tunnel list
                 tunnelSection
+                    .padding(.vertical, 4)
+
+                Divider()
+                    .padding(.horizontal, 8)
+
+                // Local dev servers detected on this machine
+                localServicesSection
                     .padding(.vertical, 4)
 
                 Divider()
@@ -235,6 +250,69 @@ struct MenuBarView: View {
         .accessibilityHint("Double tap to open dashboard and view all tunnels")
     }
 
+    // MARK: - Local Services Section
+
+    private var localServicesSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Section header
+            HStack {
+                Text("Local Services")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    Task {
+                        await localServicesViewModel.refresh()
+                    }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Refresh local services")
+                .disabled(localServicesViewModel.isScanning)
+                .accessibilityLabel("Refresh local services")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+
+            if visibleLocalServices.isEmpty {
+                Text(localServicesViewModel.hasScanned
+                        ? "No local dev servers detected"
+                        : "Scanning...")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 4)
+            } else {
+                ForEach(visibleLocalServices) { service in
+                    LocalServiceMenuRow(
+                        service: service,
+                        onCopyURL: { localServicesViewModel.copyURL(for: service) },
+                        onOpenInBrowser: { localServicesViewModel.openInBrowser(service) },
+                        onCreateTunnel: { createTunnel(for: service) }
+                    )
+                }
+            }
+        }
+        .onAppear {
+            // Refresh on open; the popover content appears when shown
+            Task {
+                await localServicesViewModel.refresh()
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Local services list")
+    }
+
+    private var visibleLocalServices: [LocalService] {
+        Array(localServicesViewModel.services.prefix(maxVisibleLocalServices))
+    }
+
     // MARK: - Login Prompt Section
 
     private var loginPromptSection: some View {
@@ -388,6 +466,11 @@ struct MenuBarView: View {
 
     private func createTunnel() {
         appState.isShowingNewTunnelWizard = true
+        openDashboard()
+    }
+
+    private func createTunnel(for service: LocalService) {
+        localServicesViewModel.createTunnel(for: service, appState: appState)
         openDashboard()
     }
 
@@ -618,6 +701,72 @@ struct TunnelRowItem: View {
             let days = Int(duration / 86400)
             return "\(days) day\(days == 1 ? "" : "s")"
         }
+    }
+}
+
+// MARK: - Local Service Menu Row
+
+/// A local service row in the menu bar dropdown with a submenu of actions.
+struct LocalServiceMenuRow: View {
+    let service: LocalService
+    let onCopyURL: () -> Void
+    let onOpenInBrowser: () -> Void
+    let onCreateTunnel: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Menu {
+            Button("Copy URL") {
+                onCopyURL()
+            }
+
+            Button("Open in Browser") {
+                onOpenInBrowser()
+            }
+
+            Divider()
+
+            Button("Create Tunnel...") {
+                onCreateTunnel()
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: service.kind.systemImage)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.orange)
+                    .frame(width: 16)
+                    .accessibilityHidden(true)
+
+                Text(service.displayName)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+
+                Text(service.portLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+            .background(isHovered ? Color.gray.opacity(0.1) : Color.clear)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(service.displayName), port \(service.port)")
+        .accessibilityHint("Opens actions: copy URL, open in browser, create tunnel")
     }
 }
 

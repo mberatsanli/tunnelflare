@@ -22,6 +22,7 @@ struct DashboardView: View {
     @State private var showingNewTunnelWizard = false
     @State private var tunnelCreationViewModel = TunnelCreationViewModel()
     @State private var showingOrganizationSelector = false
+    @State private var localServicesViewModel = LocalServicesViewModel()
 
     // MARK: - Body
 
@@ -72,6 +73,14 @@ struct DashboardView: View {
                     // Set up dependencies BEFORE showing the sheet
                     tunnelCreationViewModel.appState = appState
                     tunnelCreationViewModel.apiClient = CloudflareAPIClient(authManager: .shared)
+
+                    // Prefill the service step when launched from a detected
+                    // local service
+                    if let serviceURL = appState.pendingWizardServiceURL {
+                        tunnelCreationViewModel.serviceType = .http
+                        tunnelCreationViewModel.serviceURL = serviceURL
+                        appState.pendingWizardServiceURL = nil
+                    }
                 }
                 showingNewTunnelWizard = newValue
             }
@@ -168,6 +177,17 @@ struct DashboardView: View {
                     }
                     .help("New Tunnel (⌘N)")
 
+                case .localServices:
+                    Button {
+                        Task {
+                            await localServicesViewModel.refresh()
+                        }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .help("Refresh Local Services")
+                    .disabled(localServicesViewModel.isScanning)
+
                 case .logs:
                     // Logs page - no toolbar buttons needed
                     // (LogsView has its own filter/export controls)
@@ -208,6 +228,8 @@ struct DashboardView: View {
             Section {
                 Label("Tunnels", systemImage: "network")
                     .tag(NavigationDestination.tunnels)
+                Label("Local Services", systemImage: "antenna.radiowaves.left.and.right")
+                    .tag(NavigationDestination.localServices)
                 Label("Logs", systemImage: "doc.text")
                     .tag(NavigationDestination.logs)
                 Label("Settings", systemImage: "gear")
@@ -303,6 +325,8 @@ struct DashboardView: View {
         switch viewModel.selectedNavigation {
         case .tunnels:
             tunnelsDetailContent
+        case .localServices:
+            LocalServicesView(viewModel: localServicesViewModel)
         case .logs:
             LogsView()
         case .settings:

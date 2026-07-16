@@ -117,6 +117,10 @@ final class AppState {
     /// Whether the new tunnel wizard is being shown.
     var isShowingNewTunnelWizard: Bool = false
 
+    /// Local service address (e.g. "localhost:5173") to prefill in the new
+    /// tunnel wizard, set when creating a tunnel from a detected local service.
+    var pendingWizardServiceURL: String?
+
     /// Current search text in the tunnel list.
     var tunnelSearchText: String = ""
 
