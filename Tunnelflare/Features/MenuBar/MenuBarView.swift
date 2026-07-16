@@ -316,6 +316,15 @@ struct MenuBarView: View {
                 .padding(.vertical, 4)
 
             MenuBarActionButton(
+                title: "Check for Updates…",
+                systemImage: "arrow.down.circle",
+                action: checkForUpdates,
+                disabled: !UpdaterService.shared.canCheckForUpdates
+            )
+            .accessibilityLabel("Check for Updates")
+            .accessibilityHint("Double tap to check for a new version of Tunnelflare")
+
+            MenuBarActionButton(
                 title: "Quit Cloudflare Tunnel UI",
                 systemImage: "power",
                 shortcut: "Q",
@@ -332,6 +341,10 @@ struct MenuBarView: View {
         Task {
             await appState.refreshAllTunnels()
         }
+    }
+
+    private func checkForUpdates() {
+        UpdaterService.shared.checkForUpdates()
     }
 
     private func selectTunnel(_ tunnel: Tunnel) {

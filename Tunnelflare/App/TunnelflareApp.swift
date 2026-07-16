@@ -39,6 +39,13 @@ struct TunnelflareApp: App {
             }
 
             CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    UpdaterService.shared.checkForUpdates()
+                }
+                .disabled(!UpdaterService.shared.canCheckForUpdates)
+
+                Divider()
+
                 Button("Open Dashboard") {
                     openDashboard()
                 }
@@ -296,6 +303,18 @@ struct GeneralSettingsPlaceholder: View {
             Section("Notifications") {
                 Toggle("Enable notifications", isOn: $notificationsEnabled)
             }
+
+            Section("Updates") {
+                Toggle("Automatically check for updates", isOn: Binding(
+                    get: { UpdaterService.shared.automaticallyChecksForUpdates },
+                    set: { UpdaterService.shared.automaticallyChecksForUpdates = $0 }
+                ))
+
+                Button("Check for Updates…") {
+                    UpdaterService.shared.checkForUpdates()
+                }
+                .disabled(!UpdaterService.shared.canCheckForUpdates)
+            }
         }
         .formStyle(.grouped)
         .padding()
@@ -346,7 +365,7 @@ struct AboutSettingsPlaceholder: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            Text("Version \(AppInfo.version)")
+            Text("Version \(AppInfo.fullVersion)")
                 .foregroundStyle(.secondary)
 
             Divider()
