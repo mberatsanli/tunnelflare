@@ -381,6 +381,33 @@ final class TunnelDetailViewModel {
         configuration?.config.ingress ?? []
     }
 
+    /// Applies ingress rules saved by the ingress editor.
+    ///
+    /// Updates the cached configuration and public hostname so the header
+    /// reflects the new routing without another API round trip.
+    func applySavedIngressRules(_ rules: [IngressRule]) {
+        if let existing = configuration {
+            configuration = TunnelConfiguration(
+                config: IngressConfig(
+                    ingress: rules,
+                    warpRouting: existing.config.warpRouting,
+                    originRequest: existing.config.originRequest
+                ),
+                source: existing.source,
+                version: existing.version
+            )
+        } else {
+            configuration = TunnelConfiguration(
+                config: IngressConfig(ingress: rules, warpRouting: nil, originRequest: nil),
+                source: nil,
+                version: nil
+            )
+        }
+
+        savedIngressRules = rules
+        publicHostname = rules.first(where: { !$0.isCatchAll })?.hostname
+    }
+
     // MARK: - Actions
 
     /// Starts the tunnel.
