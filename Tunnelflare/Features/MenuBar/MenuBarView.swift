@@ -38,10 +38,10 @@ struct MenuBarView: View {
     /// Maximum number of local services to show in the list.
     private let maxVisibleLocalServices = UIConstants.maxMenuBarLocalServices
 
-    // MARK: - State
-
-    /// View model for the local services section.
-    @State private var localServicesViewModel = LocalServicesViewModel()
+    /// Shared Local Services view model (owned by AppState).
+    private var localServicesViewModel: LocalServicesViewModel {
+        appState.localServicesViewModel
+    }
 
     // MARK: - Body
 
@@ -300,10 +300,14 @@ struct MenuBarView: View {
             }
         }
         .onAppear {
-            // Refresh on open; the popover content appears when shown
-            Task {
-                await localServicesViewModel.refresh()
-            }
+            // Refresh on open and keep polling while the popover is visible.
+            // Polling (rather than a one-shot refresh) also keeps the list
+            // fresh if the popover content stays in the view hierarchy
+            // across opens.
+            localServicesViewModel.startPolling()
+        }
+        .onDisappear {
+            localServicesViewModel.stopPolling()
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Local services list")

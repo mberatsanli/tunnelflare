@@ -55,6 +55,12 @@ final class LocalServicesViewModel {
     /// The polling task, active while the list is visible.
     private var pollingTask: Task<Void, Never>?
 
+    /// Number of visible surfaces currently requesting polling.
+    ///
+    /// The view model is shared between the dashboard page and the menu bar
+    /// section; polling stops only when no surface is visible anymore.
+    private var pollObserverCount = 0
+
     // MARK: - Public Methods
 
     /// Performs a single scan and updates the service list.
@@ -70,21 +76,33 @@ final class LocalServicesViewModel {
     }
 
     /// Starts lightweight polling: scans immediately, then repeats while
-    /// visible. Call from `onAppear`.
+    /// visible. Call from `onAppear`; balanced by `stopPolling`.
     func startPolling() {
-        stopPolling()
+        pollObserverCount += 1
+        guard pollingTask == nil else { return }
 
         pollingTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.refresh()
+                // Hold self only for the duration of the scan; exit the loop
+                // once the view model is gone so the task does not sleep
+                // forever
+                if let self {
+                    await self.refresh()
+                } else {
+                    return
+                }
 
                 try? await Task.sleep(for: .seconds(Self.pollInterval))
             }
         }
     }
 
-    /// Stops polling. Call from `onDisappear`.
+    /// Stops polling once no surface is visible anymore. Call from
+    /// `onDisappear`.
     func stopPolling() {
+        pollObserverCount = max(0, pollObserverCount - 1)
+        guard pollObserverCount == 0 else { return }
+
         pollingTask?.cancel()
         pollingTask = nil
     }

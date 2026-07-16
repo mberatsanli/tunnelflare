@@ -235,6 +235,38 @@ final class LocalServiceScannerTests: XCTestCase {
         XCTAssertEqual(kind, .node)
     }
 
+    func testClassifyDoesNotMatchToolTokensInsideLongerWords() {
+        // "next" inside "nextcloud" must not match
+        let (nextName, _) = LocalServiceScanner.classify(
+            processName: "node",
+            commandLine: "node /Users/dev/nextcloud/server.js"
+        )
+        XCTAssertEqual(nextName, "node")
+
+        // "expo" inside "export" must not match
+        let (expoName, _) = LocalServiceScanner.classify(
+            processName: "node",
+            commandLine: "sh -c 'export PORT=3000' && node app.js"
+        )
+        XCTAssertEqual(expoName, "node")
+
+        // "vite" inside "invite" must not match
+        let (viteName, _) = LocalServiceScanner.classify(
+            processName: "node",
+            commandLine: "node /Users/dev/invite-app/server.js"
+        )
+        XCTAssertEqual(viteName, "node")
+    }
+
+    func testClassifyMatchesToolTokensAtPathBoundaries() {
+        // Token preceded by "/" and followed by whitespace still matches
+        let (name, _) = LocalServiceScanner.classify(
+            processName: "node",
+            commandLine: "node /project/node_modules/.bin/next dev"
+        )
+        XCTAssertEqual(name, "next")
+    }
+
     func testClassifyWithoutCommandLine() {
         let (name, kind) = LocalServiceScanner.classify(processName: "Postgres", commandLine: nil)
 

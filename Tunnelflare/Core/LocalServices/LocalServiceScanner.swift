@@ -99,13 +99,13 @@ actor LocalServiceScanner {
     /// - Returns: The discovered services, sorted by port. Empty if lsof
     ///   output is unavailable.
     func scan() async -> [LocalService] {
-        guard let output = runLsof() else {
+        guard let output = await runLsof() else {
             logger.warning("lsof unavailable or failed; local service scan returned nothing")
             return []
         }
 
         let listeners = Self.parseListeners(from: output)
-        let commandLines = resolveCommandLines(pids: Set(listeners.map(\.pid)))
+        let commandLines = await resolveCommandLines(pids: Set(listeners.map(\.pid)))
 
         return Self.buildServices(listeners: listeners, commandLines: commandLines)
     }
@@ -281,34 +281,48 @@ actor LocalServiceScanner {
         }
     }
 
-    /// Known dev tools recognizable from a command line, in matching
-    /// priority order.
-    private static let devToolTokens: [String] = [
-        "vite", "next", "nuxt", "astro", "remix", "webpack", "parcel",
-        "storybook", "react-scripts", "ng serve", "expo",
-        "rails", "puma", "jekyll",
-        "flask", "django", "uvicorn", "gunicorn", "fastapi", "streamlit",
-        "artisan", "hugo", "wrangler"
+    /// Known dev tools recognizable from a command line, mapped to display
+    /// names, in matching priority order.
+    private static let devTools: [(token: String, displayName: String)] = [
+        ("vite", "vite"), ("next", "next"), ("nuxt", "nuxt"),
+        ("astro", "astro"), ("remix", "remix"), ("webpack", "webpack"),
+        ("parcel", "parcel"), ("storybook", "storybook"),
+        ("react-scripts", "react"), ("ng serve", "angular"), ("expo", "expo"),
+        ("rails", "rails"), ("puma", "puma"), ("jekyll", "jekyll"),
+        ("flask", "flask"), ("django", "django"), ("manage.py", "django"),
+        ("uvicorn", "uvicorn"), ("gunicorn", "gunicorn"),
+        ("fastapi", "fastapi"), ("streamlit", "streamlit"),
+        ("artisan", "laravel"), ("hugo", "hugo"), ("wrangler", "wrangler")
     ]
+
+    /// Precompiled boundary-aware matchers for the known dev tools.
+    ///
+    /// Each token must stand alone (not be a substring of a longer word or
+    /// path component), so "expo" does not match "export" and "next" does
+    /// not match "nextcloud". NSRegularExpression (ICU) is used because
+    /// Swift's native Regex does not support lookbehind assertions.
+    private static let devToolMatchers: [(displayName: String, regex: NSRegularExpression)] = {
+        devTools.compactMap { tool in
+            let escaped = NSRegularExpression.escapedPattern(for: tool.token)
+            guard let regex = try? NSRegularExpression(
+                pattern: "(?<![0-9a-z_-])\(escaped)(?![0-9a-z_-])"
+            ) else {
+                return nil
+            }
+            return (tool.displayName, regex)
+        }
+    }()
 
     /// Recognizes a known dev tool inside a command line.
     ///
     /// - Parameter commandLine: The lowercase command line.
     /// - Returns: The tool's display name, or nil if none is recognized.
     static func devTool(inCommandLine commandLine: String) -> String? {
-        for token in devToolTokens where commandLine.contains(token) {
-            switch token {
-            case "ng serve": return "angular"
-            case "react-scripts": return "react"
-            case "artisan": return "laravel"
-            case "manage.py": return "django"
-            default: return token
-            }
-        }
+        let range = NSRange(commandLine.startIndex..., in: commandLine)
 
-        // Django dev server: "python manage.py runserver"
-        if commandLine.contains("manage.py") {
-            return "django"
+        for matcher in devToolMatchers
+        where matcher.regex.firstMatch(in: commandLine, options: [], range: range) != nil {
+            return matcher.displayName
         }
 
         return nil
@@ -316,37 +330,56 @@ actor LocalServiceScanner {
 
     // MARK: - Private Methods
 
+    /// Runs an external process and returns its stdout, or nil on failure.
+    ///
+    /// The blocking Process APIs (`waitUntilExit`, pipe reads) run on a
+    /// global dispatch queue so they never park a Swift-concurrency
+    /// cooperative thread while lsof/ps execute.
+    private static func runProcess(path: String, arguments: [String]) async -> String? {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: path)
+                process.arguments = arguments
+
+                let outputPipe = Pipe()
+                process.standardOutput = outputPipe
+                process.standardError = Pipe()
+
+                do {
+                    try process.run()
+                } catch {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+
+                continuation.resume(returning: String(data: data, encoding: .utf8))
+            }
+        }
+    }
+
     /// Runs lsof and returns its raw field output, or nil on failure.
-    private func runLsof() -> String? {
+    private func runLsof() async -> String? {
         guard let lsofPath = Self.lsofPaths.first(where: {
             FileManager.default.isExecutableFile(atPath: $0)
         }) else {
             return nil
         }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: lsofPath)
         // +c 0: full command names; -nP: numeric hosts/ports;
         // -Fpcn: machine-parsable field output (pid, command, name)
-        process.arguments = ["+c", "0", "-nP", "-iTCP", "-sTCP:LISTEN", "-Fpcn"]
-
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-        } catch {
-            logger.error("Failed to run lsof: \(error.localizedDescription)")
-            return nil
-        }
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
+        let output = await Self.runProcess(
+            path: lsofPath,
+            arguments: ["+c", "0", "-nP", "-iTCP", "-sTCP:LISTEN", "-Fpcn"]
+        )
 
         // lsof exits non-zero when some sockets can't be inspected; partial
         // output is still usable, so only bail when there is no output.
-        guard let output = String(data: data, encoding: .utf8), !output.isEmpty else {
+        guard let output, !output.isEmpty else {
+            logger.error("lsof produced no output")
             return nil
         }
 
@@ -358,31 +391,21 @@ actor LocalServiceScanner {
     /// - Parameter pids: The PIDs to resolve.
     /// - Returns: Command lines keyed by PID. Empty on failure (labels then
     ///   fall back to process names).
-    private func resolveCommandLines(pids: Set<Int32>) -> [Int32: String] {
+    private func resolveCommandLines(pids: Set<Int32>) async -> [Int32: String] {
         guard !pids.isEmpty,
               FileManager.default.isExecutableFile(atPath: Self.psPath) else {
             return [:]
         }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: Self.psPath)
-        process.arguments = ["-o", "pid=,command=", "-p", pids.map(String.init).joined(separator: ",")]
+        let output = await Self.runProcess(
+            path: Self.psPath,
+            arguments: ["-o", "pid=,command=", "-p", pids.map(String.init).joined(separator: ",")]
+        )
 
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-        } catch {
-            logger.error("Failed to run ps: \(error.localizedDescription)")
+        guard let output else {
+            logger.error("ps produced no output; falling back to process names")
             return [:]
         }
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
-        guard let output = String(data: data, encoding: .utf8) else { return [:] }
 
         return Self.parseCommandLines(from: output)
     }

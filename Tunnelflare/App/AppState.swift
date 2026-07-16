@@ -144,6 +144,13 @@ final class AppState {
     /// This is set after initialization when services are ready.
     var serviceContainer: ServiceContainer?
 
+    /// Shared view model for the Local Services list.
+    ///
+    /// A single instance is shared between the dashboard page and the menu
+    /// bar section so both surfaces show the same scan results and only one
+    /// scan runs at a time.
+    let localServicesViewModel = LocalServicesViewModel()
+
     // MARK: - Initialization
 
     /// Creates a new AppState instance.

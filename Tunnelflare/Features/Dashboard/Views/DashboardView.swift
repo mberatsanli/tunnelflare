@@ -22,7 +22,11 @@ struct DashboardView: View {
     @State private var showingNewTunnelWizard = false
     @State private var tunnelCreationViewModel = TunnelCreationViewModel()
     @State private var showingOrganizationSelector = false
-    @State private var localServicesViewModel = LocalServicesViewModel()
+
+    /// Shared Local Services view model (owned by AppState).
+    private var localServicesViewModel: LocalServicesViewModel {
+        appState.localServicesViewModel
+    }
 
     // MARK: - Body
 
@@ -68,7 +72,7 @@ struct DashboardView: View {
                     appState.pendingTunnelDetailNavigation = nil
                 }
             }
-            .onChange(of: appState.isShowingNewTunnelWizard) { _, newValue in
+            .onChange(of: appState.isShowingNewTunnelWizard, initial: true) { _, newValue in
                 if newValue {
                     // Set up dependencies BEFORE showing the sheet
                     tunnelCreationViewModel.appState = appState
@@ -87,6 +91,7 @@ struct DashboardView: View {
             .sheet(isPresented: $showingNewTunnelWizard, onDismiss: {
                 // Ensure state is reset when sheet is dismissed by any means
                 appState.isShowingNewTunnelWizard = false
+                appState.pendingWizardServiceURL = nil
                 tunnelCreationViewModel.reset()
             }) {
                 TunnelWizardView(
