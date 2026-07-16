@@ -187,6 +187,9 @@ struct OrganizationRow: View {
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(isSelected ? Color.orange.opacity(0.3) : Color.secondary.opacity(0.15), lineWidth: 1)
             )
+            // Make the entire row hittable, not just the text glyphs. Without this
+            // the transparent background/Spacer areas don't register clicks.
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
