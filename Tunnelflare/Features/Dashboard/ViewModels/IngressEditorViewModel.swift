@@ -518,6 +518,15 @@ final class IngressEditorViewModel {
             configSource = updated.source
             loadedConfig = updated.config ?? config
 
+            // Re-adopt the server-echoed rules so per-rule raw JSON reflects
+            // any server-side normalization; rule values are unchanged
+            // (equality ignores raw), so the visible draft stays stable
+            if let freshRules = updated.config?.ingress, !freshRules.isEmpty {
+                let normalized = IngressRuleValidator.normalized(freshRules)
+                rules = normalized.filter { !$0.isCatchAll }
+                catchAllRule = normalized.last ?? catchAllRule
+            }
+
             // Create requested DNS records; failed ones stay pending so
             // another save retries them
             await createPendingDNSRecords(tunnelId: tunnel.id, apiClient: apiClient)

@@ -47,7 +47,6 @@ actor CloudflareAPIClient {
     private let logger = Logger.api
 
     /// JSON decoder configured for Cloudflare API responses.
-    private let decoder = JSONDecoder.cloudflareAPI
 
     /// JSON encoder configured for Cloudflare API requests.
     private let encoder = JSONEncoder.cloudflareAPI
@@ -239,7 +238,7 @@ actor CloudflareAPIClient {
         do {
             // Special handling for String responses (like tunnel token)
             if E.Response.self == String.self {
-                let tokenResponse = try decoder.decode(TokenResponse.self, from: data)
+                let tokenResponse = try endpoint.responseDecoder.decode(TokenResponse.self, from: data)
                 if tokenResponse.success {
                     return tokenResponse.result as! E.Response
                 } else if let errors = tokenResponse.errors, !errors.isEmpty {
@@ -249,7 +248,7 @@ actor CloudflareAPIClient {
             }
 
             // Standard API response
-            let apiResponse = try decoder.decode(APIResponse<E.Response>.self, from: data)
+            let apiResponse = try endpoint.responseDecoder.decode(APIResponse<E.Response>.self, from: data)
 
             guard apiResponse.success else {
                 throw APIError.apiError(errors: apiResponse.errors ?? [])
@@ -277,7 +276,7 @@ actor CloudflareAPIClient {
 
         do {
             // Standard API response with pagination
-            let apiResponse = try decoder.decode(APIResponse<E.Response>.self, from: data)
+            let apiResponse = try endpoint.responseDecoder.decode(APIResponse<E.Response>.self, from: data)
 
             guard apiResponse.success else {
                 throw APIError.apiError(errors: apiResponse.errors ?? [])

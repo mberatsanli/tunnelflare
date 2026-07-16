@@ -58,6 +58,7 @@ indirect enum JSONValue: Codable, Hashable, Sendable {
     case null
     case bool(Bool)
     case int(Int)
+    case uint(UInt64)
     case double(Double)
     case string(String)
     case array([JSONValue])
@@ -72,6 +73,9 @@ indirect enum JSONValue: Codable, Hashable, Sendable {
             self = .bool(bool)
         } else if let int = try? container.decode(Int.self) {
             self = .int(int)
+        } else if let uint = try? container.decode(UInt64.self) {
+            // Integers above Int64.max; a Double fallback would lose precision
+            self = .uint(uint)
         } else if let double = try? container.decode(Double.self) {
             self = .double(double)
         } else if let string = try? container.decode(String.self) {
@@ -98,6 +102,8 @@ indirect enum JSONValue: Codable, Hashable, Sendable {
             try container.encode(bool)
         case .int(let int):
             try container.encode(int)
+        case .uint(let uint):
+            try container.encode(uint)
         case .double(let double):
             try container.encode(double)
         case .string(let string):

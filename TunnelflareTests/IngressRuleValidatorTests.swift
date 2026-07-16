@@ -110,6 +110,7 @@ final class IngressRuleValidatorTests: XCTestCase {
             "unix:/var/run/app.sock",
             "http_status:404",
             "http_status:200",
+            "http://my_app:8080",       // Underscore hosts (e.g. docker aliases) stay valid
         ]
 
         for service in validServices {
@@ -133,7 +134,7 @@ final class IngressRuleValidatorTests: XCTestCase {
             "unix:",                    // Missing socket path
             "http://http_status:404",   // Special-service keyword as host
             "https://http_status:200",  // Special-service keyword as host
-            "http://hello_world:80",    // Underscore host (special service)
+            "http://hello_world:80",    // Special-service keyword as host
         ]
 
         for service in invalidServices {
@@ -330,7 +331,7 @@ final class IngressRuleValidatorTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
-        let decoded = try JSONDecoder.cloudflareAPI.decode(TunnelConfiguration.self, from: json)
+        let decoded = try JSONDecoder().decode(TunnelConfiguration.self, from: json)
 
         XCTAssertNil(decoded.config)
         XCTAssertEqual(decoded.source, "cloudflare")
@@ -374,9 +375,17 @@ final class IngressRuleValidatorTests: XCTestCase {
                 "noHappyEyeballs": true,
                 "proxyType": "socks"
             },
-            "someFutureField": {"nested": [1, 2.5, "x", null, false]}
+            "someFutureField": {"nested": [1, 2.5, "x", null, false]},
+            "some_snake_field": true,
+            "bigId": 18446744073709551615
         }
         """.data(using: .utf8)!
+    }
+
+    /// Decodes a config the way the tunnel-configuration endpoints do
+    /// (plain decoder, so embedded raw JSON keys are captured verbatim).
+    private func decodeConfig(_ data: Data) throws -> IngressConfig {
+        try JSONDecoder().decode(IngressConfig.self, from: data)
     }
 
     /// Encodes a config the way the update endpoint does (plain encoder, so
@@ -388,7 +397,7 @@ final class IngressRuleValidatorTests: XCTestCase {
     }
 
     func testConfigRoundTripPreservesUnmodeledFields() throws {
-        let decoded = try JSONDecoder.cloudflareAPI.decode(IngressConfig.self, from: configJSONWithUnmodeledFields)
+        let decoded = try decodeConfig(configJSONWithUnmodeledFields)
 
         // Rebuild the config exactly as the editor does on save
         let saved = IngressConfig(
@@ -400,8 +409,11 @@ final class IngressRuleValidatorTests: XCTestCase {
 
         let object = try putJSONObject(for: saved)
 
-        // Unmodeled top-level key survives
+        // Unmodeled top-level keys survive with exact names (camelCase,
+        // snake_case, and integers beyond Int64.max included)
         XCTAssertNotNil(object["someFutureField"])
+        XCTAssertEqual(object["some_snake_field"] as? Bool, true)
+        XCTAssertEqual((object["bigId"] as? NSNumber)?.uint64Value, UInt64.max)
 
         // Global originRequest keeps unmodeled fields with exact key names
         let originRequest = try XCTUnwrap(object["originRequest"] as? [String: Any])
@@ -428,7 +440,7 @@ final class IngressRuleValidatorTests: XCTestCase {
     }
 
     func testEditedRulePreservesUnmodeledFields() throws {
-        let decoded = try JSONDecoder.cloudflareAPI.decode(IngressConfig.self, from: configJSONWithUnmodeledFields)
+        let decoded = try decodeConfig(configJSONWithUnmodeledFields)
         let original = decoded.ingress[0]
 
         // Edit hostname and service the way commitRuleForm does, carrying
