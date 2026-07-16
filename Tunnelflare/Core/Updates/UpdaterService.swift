@@ -26,9 +26,34 @@ import SwiftUI
 /// - `SUPublicEDKey`: the EdDSA public key matching the CI signing key
 ///
 /// See `docs/RELEASING.md` for key generation and release setup.
+///
+/// Until a real `SUPublicEDKey` is configured (local dev and fork builds
+/// ship the placeholder), the updater is never started and all update UI is
+/// disabled — starting Sparkle without a valid key would surface a
+/// confusing "The updater failed to start" error at the user.
 @MainActor
 @Observable
 final class UpdaterService {
+
+    // MARK: - Configuration
+
+    /// The placeholder value used to detect an unconfigured public key.
+    private static let publicEDKeyPlaceholder = "REPLACE_WITH_SPARKLE_ED25519_PUBLIC_KEY"
+
+    /// Whether Sparkle is configured with a real feed URL and signing key.
+    ///
+    /// False while `Info.plist` still carries the `SUPublicEDKey` placeholder
+    /// (or an empty feed), which is the state of local and fork builds.
+    static let isConfigured: Bool = {
+        guard let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String,
+              !key.isEmpty, key != publicEDKeyPlaceholder,
+              let feed = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String,
+              !feed.isEmpty
+        else {
+            return false
+        }
+        return true
+    }()
 
     // MARK: - Properties
 
@@ -46,6 +71,7 @@ final class UpdaterService {
     /// UserDefaults (`SUEnableAutomaticChecks`).
     var automaticallyChecksForUpdates: Bool {
         didSet {
+            guard Self.isConfigured else { return }
             updaterController.updater.automaticallyChecksForUpdates = automaticallyChecksForUpdates
         }
     }
@@ -59,15 +85,22 @@ final class UpdaterService {
     // MARK: - Initialization
 
     private init() {
-        // Start the updater immediately so scheduled background checks run.
+        // Start the updater immediately so scheduled background checks run —
+        // but only when a real signing key is configured; starting Sparkle
+        // with the placeholder key fails with an error dialog.
         updaterController = SPUStandardUpdaterController(
-            startingUpdater: true,
+            startingUpdater: Self.isConfigured,
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
 
-        automaticallyChecksForUpdates = updaterController.updater.automaticallyChecksForUpdates
+        automaticallyChecksForUpdates = Self.isConfigured
+            ? updaterController.updater.automaticallyChecksForUpdates
+            : false
 
+        // canCheckForUpdates stays false while the updater is not started,
+        // which keeps all "Check for Updates…" UI disabled in
+        // unconfigured builds.
         canCheckForUpdatesSubscription = updaterController.updater
             .publisher(for: \.canCheckForUpdates)
             .sink { [weak self] value in
@@ -92,6 +125,7 @@ final class UpdaterService {
     /// menu bar app (`LSUIElement`) Tunnelflare is usually not the active
     /// application when this is triggered.
     func checkForUpdates() {
+        guard Self.isConfigured else { return }
         NSApp.activate(ignoringOtherApps: true)
         updaterController.checkForUpdates(nil)
     }
@@ -113,5 +147,10 @@ struct CheckForUpdatesButton: View {
             updaterService.checkForUpdates()
         }
         .disabled(!updaterService.canCheckForUpdates)
+        .help(
+            UpdaterService.isConfigured
+                ? "Check for a new version of Tunnelflare"
+                : "Updates are not configured in this build"
+        )
     }
 }
