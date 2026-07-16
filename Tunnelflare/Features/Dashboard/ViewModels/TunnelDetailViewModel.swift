@@ -213,12 +213,12 @@ final class TunnelDetailViewModel {
                     tunnelId: tunnel.id
                 )
                 // Update hostname from API response
-                extractPublicHostname(from: configuration?.config.ingress)
+                extractPublicHostname(from: configuration?.config?.ingress)
 
                 // Save the configuration locally
                 try? await TunnelStorageManager.shared.saveConfig(
                     tunnelId: tunnel.id,
-                    ingressRules: configuration?.config.ingress ?? []
+                    ingressRules: configuration?.config?.ingress ?? []
                 )
             }
         } catch {
@@ -378,7 +378,7 @@ final class TunnelDetailViewModel {
 
     /// The ingress rules.
     var ingressRules: [IngressRule] {
-        configuration?.config.ingress ?? []
+        configuration?.config?.ingress ?? []
     }
 
     /// Applies ingress rules saved by the ingress editor.
@@ -390,8 +390,9 @@ final class TunnelDetailViewModel {
             configuration = TunnelConfiguration(
                 config: IngressConfig(
                     ingress: rules,
-                    warpRouting: existing.config.warpRouting,
-                    originRequest: existing.config.originRequest
+                    warpRouting: existing.config?.warpRouting,
+                    originRequest: existing.config?.originRequest,
+                    raw: existing.config?.raw
                 ),
                 source: existing.source,
                 version: existing.version
@@ -634,16 +635,16 @@ final class TunnelDetailViewModel {
             self.configuration = configuration
 
             // Update hostname from fresh config
-            extractPublicHostname(from: configuration.config.ingress)
+            extractPublicHostname(from: configuration.config?.ingress)
 
             // Save updated config to local storage
             try? await TunnelStorageManager.shared.saveConfig(
                 tunnelId: tunnel.id,
-                ingressRules: configuration.config.ingress
+                ingressRules: configuration.config?.ingress ?? []
             )
 
             // Update saved ingress rules
-            self.savedIngressRules = configuration.config.ingress
+            self.savedIngressRules = configuration.config?.ingress ?? []
 
         } catch {
             self.error = error.localizedDescription

@@ -211,8 +211,12 @@ enum TunnelEndpoints {
 
         let method = HTTPMethod.put
 
-        var body: Encodable? {
-            UpdateTunnelConfigurationRequest(config: configuration)
+        /// Encoded with a plain encoder (no snake_case strategy): the config
+        /// merges in raw JSON preserved from the GET, whose keys (camelCase
+        /// originRequest fields, "warp-routing", unknown keys) must be sent
+        /// back to the API exactly as they were received.
+        var rawBody: Data? {
+            try? JSONEncoder().encode(UpdateTunnelConfigurationRequest(config: configuration))
         }
 
         init(accountId: String, tunnelId: String, configuration: IngressConfig) {

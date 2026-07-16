@@ -134,6 +134,12 @@ enum IngressRuleValidator {
 
         guard let host = url.host, !host.isEmpty else { return false }
 
+        // Reject cloudflared special-service keywords pasted into the host
+        // field: "http://http_status:404" parses as host "http_status" with
+        // port 404 and would silently corrupt the rule. Underscores are not
+        // valid in origin hostnames anyway.
+        guard !host.contains("_") else { return false }
+
         if let port = url.port, !(1...65535).contains(port) {
             return false
         }

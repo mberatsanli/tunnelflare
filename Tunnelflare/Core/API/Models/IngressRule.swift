@@ -33,13 +33,97 @@ import Foundation
 /// ```
 struct TunnelConfiguration: Codable, Sendable {
     /// The configuration content.
-    let config: IngressConfig
+    ///
+    /// `nil` for tunnels that have never had a remote configuration
+    /// (the API returns `"config": null` for them).
+    let config: IngressConfig?
 
     /// The source of the configuration.
     let source: String?
 
     /// Version of the configuration.
     let version: Int?
+}
+
+// MARK: - JSONValue
+
+/// A generic JSON value used to round-trip API payloads without data loss.
+///
+/// The Cloudflare tunnel configuration contains many fields this app does
+/// not model (e.g. `ipRules`, `proxyPort`, `bastionMode`). Decoding captures
+/// the original JSON alongside the typed models so a later PUT can merge the
+/// edited fields into the original object instead of re-serializing from
+/// scratch, which would silently drop everything unmodeled.
+indirect enum JSONValue: Codable, Hashable, Sendable {
+    case null
+    case bool(Bool)
+    case int(Int)
+    case double(Double)
+    case string(String)
+    case array([JSONValue])
+    case object([String: JSONValue])
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+
+        if container.decodeNil() {
+            self = .null
+        } else if let bool = try? container.decode(Bool.self) {
+            self = .bool(bool)
+        } else if let int = try? container.decode(Int.self) {
+            self = .int(int)
+        } else if let double = try? container.decode(Double.self) {
+            self = .double(double)
+        } else if let string = try? container.decode(String.self) {
+            self = .string(string)
+        } else if let array = try? container.decode([JSONValue].self) {
+            self = .array(array)
+        } else if let object = try? container.decode([String: JSONValue].self) {
+            self = .object(object)
+        } else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unsupported JSON value"
+            )
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+
+        switch self {
+        case .null:
+            try container.encodeNil()
+        case .bool(let bool):
+            try container.encode(bool)
+        case .int(let int):
+            try container.encode(int)
+        case .double(let double):
+            try container.encode(double)
+        case .string(let string):
+            try container.encode(string)
+        case .array(let array):
+            try container.encode(array)
+        case .object(let object):
+            try container.encode(object)
+        }
+    }
+
+    /// Converts an `Encodable` value into a `JSONValue` using plain coders,
+    /// so key names are preserved exactly as spelled in `CodingKeys`.
+    init?<T: Encodable>(encoding value: T) {
+        guard let data = try? JSONEncoder().encode(value),
+              let decoded = try? JSONDecoder().decode(JSONValue.self, from: data) else {
+            return nil
+        }
+        self = decoded
+    }
+
+    /// The wrapped dictionary when this value is an object, else `nil`.
+    var objectValue: [String: JSONValue]? {
+        if case .object(let object) = self { return object }
+        return nil
+    }
 }
 
 // MARK: - IngressConfig
@@ -55,10 +139,64 @@ struct IngressConfig: Codable, Sendable {
     /// Origin request settings.
     let originRequest: OriginRequestConfig?
 
+    /// The original config JSON as returned by the API.
+    ///
+    /// Preserved so fields the editor does not model or touch (global
+    /// originRequest options, warp-routing extras, unknown keys) survive
+    /// the GET -> PUT round-trip. See ``JSONValue``.
+    let raw: JSONValue?
+
     enum CodingKeys: String, CodingKey {
         case ingress
         case warpRouting = "warp-routing"
         case originRequest = "originRequest"
+    }
+
+    init(
+        ingress: [IngressRule],
+        warpRouting: WarpRouting?,
+        originRequest: OriginRequestConfig?,
+        raw: JSONValue? = nil
+    ) {
+        self.ingress = ingress
+        self.warpRouting = warpRouting
+        self.originRequest = originRequest
+        self.raw = raw
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ingress = try container.decodeIfPresent([IngressRule].self, forKey: .ingress) ?? []
+        warpRouting = try container.decodeIfPresent(WarpRouting.self, forKey: .warpRouting)
+        originRequest = try container.decodeIfPresent(OriginRequestConfig.self, forKey: .originRequest)
+        raw = try? JSONValue(from: decoder)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        try mergedJSON().encode(to: encoder)
+    }
+
+    /// The config as JSON: the original raw object (when available) with the
+    /// edited ingress rules merged in, so unmodeled fields are not clobbered.
+    func mergedJSON() -> JSONValue {
+        var object = raw?.objectValue ?? [:]
+
+        object["ingress"] = .array(ingress.map { $0.mergedJSON() })
+
+        // Only fall back to the typed models when the raw JSON has nothing
+        // for these keys (e.g. configs built locally rather than decoded).
+        if object["warp-routing"] == nil,
+           let warpRouting = warpRouting,
+           let json = JSONValue(encoding: warpRouting) {
+            object["warp-routing"] = json
+        }
+        if object["originRequest"] == nil,
+           let originRequest = originRequest,
+           let json = JSONValue(encoding: originRequest) {
+            object["originRequest"] = json
+        }
+
+        return .object(object)
     }
 }
 
@@ -89,6 +227,95 @@ struct IngressRule: Codable, Identifiable, Hashable, Sendable {
 
     /// Origin request settings specific to this rule.
     let originRequest: OriginRequestConfig?
+
+    /// The rule's original JSON as returned by the API.
+    ///
+    /// Preserved so per-rule fields the editor does not model or touch
+    /// survive the GET -> PUT round-trip. `nil` for rules created locally.
+    let raw: JSONValue?
+
+    init(
+        hostname: String?,
+        path: String?,
+        service: String,
+        originRequest: OriginRequestConfig?,
+        raw: JSONValue? = nil
+    ) {
+        self.hostname = hostname
+        self.path = path
+        self.service = service
+        self.originRequest = originRequest
+        self.raw = raw
+    }
+
+    // MARK: - Codable
+
+    enum CodingKeys: String, CodingKey {
+        case hostname
+        case path
+        case service
+        case originRequest = "originRequest"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hostname = try container.decodeIfPresent(String.self, forKey: .hostname)
+        path = try container.decodeIfPresent(String.self, forKey: .path)
+        service = try container.decode(String.self, forKey: .service)
+        originRequest = try container.decodeIfPresent(OriginRequestConfig.self, forKey: .originRequest)
+        raw = try? JSONValue(from: decoder)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        try mergedJSON().encode(to: encoder)
+    }
+
+    /// The rule as JSON: the original raw object (when available) with the
+    /// editable fields overlaid, so unmodeled per-rule keys are preserved.
+    func mergedJSON() -> JSONValue {
+        var object = raw?.objectValue ?? [:]
+
+        if let hostname = hostname {
+            object["hostname"] = .string(hostname)
+        } else {
+            object.removeValue(forKey: "hostname")
+        }
+        if let path = path {
+            object["path"] = .string(path)
+        } else {
+            object.removeValue(forKey: "path")
+        }
+        object["service"] = .string(service)
+
+        // The editor never modifies per-rule originRequest, so the raw copy
+        // (when present) is authoritative; only encode the typed model for
+        // locally created rules.
+        if object["originRequest"] == nil,
+           let originRequest = originRequest,
+           let json = JSONValue(encoding: originRequest) {
+            object["originRequest"] = json
+        }
+
+        return .object(object)
+    }
+
+    // MARK: - Hashable Conformance
+
+    /// Equality ignores `raw`: two rules are the same when their editable
+    /// fields match, regardless of round-trip bookkeeping.
+    static func == (lhs: IngressRule, rhs: IngressRule) -> Bool {
+        lhs.hostname == rhs.hostname
+            && lhs.path == rhs.path
+            && lhs.service == rhs.service
+            && lhs.originRequest == rhs.originRequest
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(hostname)
+        hasher.combine(path)
+        hasher.combine(service)
+        hasher.combine(originRequest)
+    }
 
     // MARK: - Identifiable Conformance
 

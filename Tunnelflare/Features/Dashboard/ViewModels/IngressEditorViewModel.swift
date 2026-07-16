@@ -280,7 +280,9 @@ final class IngressEditorViewModel {
         loadedConfig = configuration.config
         configSource = configuration.source
 
-        let normalized = IngressRuleValidator.normalized(configuration.config.ingress)
+        // A never-configured tunnel has "config": null; treat it as an empty
+        // config (normalization appends the default catch-all below).
+        let normalized = IngressRuleValidator.normalized(configuration.config?.ingress ?? [])
         rules = normalized.filter { !$0.isCatchAll }
         catchAllRule = normalized.last ?? IngressRuleValidator.defaultCatchAll
         savedRules = fullRules
@@ -397,14 +399,16 @@ final class IngressEditorViewModel {
         let normalizedPath = formNormalizedPath
         let path: String? = normalizedPath.isEmpty ? nil : normalizedPath
 
-        // Preserve per-rule origin settings when editing
-        let originRequest = editingIndex.flatMap { rules.indices.contains($0) ? rules[$0].originRequest : nil }
+        // Preserve per-rule origin settings and raw JSON when editing, so
+        // fields the form doesn't touch survive the round-trip
+        let editedRule = editingIndex.flatMap { rules.indices.contains($0) ? rules[$0] : nil }
 
         let rule = IngressRule(
             hostname: hostname,
             path: path,
             service: formFullService,
-            originRequest: originRequest
+            originRequest: editedRule?.originRequest,
+            raw: editedRule?.raw
         )
 
         if let index = editingIndex, rules.indices.contains(index) {
@@ -496,10 +500,14 @@ final class IngressEditorViewModel {
         defer { isSaving = false }
 
         do {
+            // Carry the raw config JSON through so fields the editor does
+            // not model (originRequest extras, unknown keys) are merged back
+            // instead of being clobbered by the full PUT
             let config = IngressConfig(
                 ingress: fullRules,
                 warpRouting: loadedConfig?.warpRouting,
-                originRequest: loadedConfig?.originRequest
+                originRequest: loadedConfig?.originRequest,
+                raw: loadedConfig?.raw
             )
 
             let updated = try await apiClient.updateTunnelConfiguration(
@@ -508,6 +516,7 @@ final class IngressEditorViewModel {
                 config: config
             )
             configSource = updated.source
+            loadedConfig = updated.config ?? config
 
             // Create requested DNS records; failed ones stay pending so
             // another save retries them
@@ -541,19 +550,33 @@ final class IngressEditorViewModel {
     private func createPendingDNSRecords(tunnelId: String, apiClient: CloudflareAPIClient) async {
         for (hostname, zone) in pendingDNSHostnames {
             do {
+                // Only consider CNAME records: a same-name A/AAAA/TXT/MX
+                // record must never be converted into a tunnel CNAME
                 let existingRecords = try await apiClient.fetchDNSRecords(
                     zoneId: zone.id,
+                    recordType: "CNAME",
                     name: hostname
                 )
 
-                if let existing = existingRecords.first {
+                // Only auto-update CNAMEs that already point at a tunnel;
+                // anything else belongs to the user (or another product) and
+                // must not be silently rehomed
+                if let tunnelCNAME = existingRecords.first(where: { $0.content.hasSuffix(".cfargotunnel.com") }) {
                     try await apiClient.updateTunnelDNSRecord(
                         zoneId: zone.id,
-                        recordId: existing.id,
+                        recordId: tunnelCNAME.id,
                         name: hostname,
                         tunnelId: tunnelId
                     )
+                } else if let existing = existingRecords.first {
+                    dnsWarnings.append(
+                        "A CNAME record for \(hostname) already exists (pointing to \(existing.content)) and was not modified. Update or remove it in the Cloudflare dashboard to route it to this tunnel."
+                    )
+                    pendingDNSHostnames.removeValue(forKey: hostname)
+                    continue
                 } else {
+                    // No CNAME exists; creation fails with a clear API error
+                    // if a record of another type occupies the name
                     try await apiClient.createTunnelDNSRecord(
                         zoneId: zone.id,
                         name: hostname,

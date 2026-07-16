@@ -744,7 +744,7 @@ extension CloudflareAPIClient {
         }
 
         // Extract hostnames from ingress rules
-        let hostnames = configuration.config.ingress
+        let hostnames = (configuration.config?.ingress ?? [])
             .compactMap { $0.hostname }
             .filter { !$0.isEmpty }
 

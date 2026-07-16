@@ -51,6 +51,12 @@ protocol Endpoint {
     /// The request body, if any.
     var body: Encodable? { get }
 
+    /// A pre-encoded request body, taking precedence over `body`.
+    ///
+    /// Use when the payload must bypass the shared snake_case key strategy,
+    /// e.g. to round-trip API JSON whose keys must be sent back verbatim.
+    var rawBody: Data? { get }
+
     /// Additional headers for this request.
     var headers: [String: String]? { get }
 
@@ -66,6 +72,9 @@ extension Endpoint {
 
     /// Default to no body.
     var body: Encodable? { nil }
+
+    /// Default to no pre-encoded body.
+    var rawBody: Data? { nil }
 
     /// Default to no additional headers.
     var headers: [String: String]? { nil }
@@ -110,8 +119,10 @@ extension Endpoint {
             request.setValue(value, forHTTPHeaderField: key)
         }
 
-        // Encode body if present
-        if let body = body {
+        // Encode body if present (a pre-encoded body takes precedence)
+        if let rawBody = rawBody {
+            request.httpBody = rawBody
+        } else if let body = body {
             do {
                 request.httpBody = try JSONEncoder.cloudflareAPI.encode(AnyEncodable(body))
             } catch {
