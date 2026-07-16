@@ -39,10 +39,7 @@ struct TunnelflareApp: App {
             }
 
             CommandGroup(after: .appInfo) {
-                Button("Check for Updates…") {
-                    UpdaterService.shared.checkForUpdates()
-                }
-                .disabled(!UpdaterService.shared.canCheckForUpdates)
+                CheckForUpdatesButton()
 
                 Divider()
 
@@ -294,6 +291,8 @@ struct GeneralSettingsPlaceholder: View {
     @State private var notificationsEnabled = true
 
     var body: some View {
+        @Bindable var updaterService = UpdaterService.shared
+
         Form {
             Section("Startup") {
                 Toggle("Launch at login", isOn: $launchAtLogin)
@@ -305,15 +304,9 @@ struct GeneralSettingsPlaceholder: View {
             }
 
             Section("Updates") {
-                Toggle("Automatically check for updates", isOn: Binding(
-                    get: { UpdaterService.shared.automaticallyChecksForUpdates },
-                    set: { UpdaterService.shared.automaticallyChecksForUpdates = $0 }
-                ))
+                Toggle("Automatically check for updates", isOn: $updaterService.automaticallyChecksForUpdates)
 
-                Button("Check for Updates…") {
-                    UpdaterService.shared.checkForUpdates()
-                }
-                .disabled(!UpdaterService.shared.canCheckForUpdates)
+                CheckForUpdatesButton()
             }
         }
         .formStyle(.grouped)

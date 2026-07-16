@@ -35,7 +35,9 @@ so the UI always reflects the build settings.
 3. The [release workflow](../.github/workflows/release.yml) then:
    - validates the tag is strict SemVer (`vX.Y.Z`) — anything else fails,
    - stamps the tag version into `Config/Base.xcconfig`
-     (`CURRENT_PROJECT_VERSION` is set to the workflow run number),
+     (`CURRENT_PROJECT_VERSION` is derived from the SemVer components as
+     `MAJOR*1000000 + MINOR*1000 + PATCH`, so build numbers stay monotonic
+     with the version and reproducible across workflow re-runs),
    - builds and archives the app,
    - **fails if the built app's version does not match the tag**,
    - signs the zip with the Sparkle EdDSA key and generates `appcast.xml`,
@@ -44,6 +46,11 @@ so the UI always reflects the build settings.
 The app's update feed (`SUFeedURL` in `Info.plist`) points at
 `https://github.com/mberatsanli/tunnelflare/releases/latest/download/appcast.xml`,
 so each release automatically becomes the live appcast.
+
+> **Note:** the Sparkle framework version is pinned exactly in the Xcode
+> project (`XCRemoteSwiftPackageReference` in `project.pbxproj`) and must be
+> kept in sync with `SPARKLE_VERSION` in the release workflow, which
+> downloads the matching `generate_appcast` tool.
 
 ## Sparkle update signing — one-time setup
 

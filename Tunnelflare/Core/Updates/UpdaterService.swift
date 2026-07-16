@@ -10,6 +10,7 @@ import AppKit
 import Combine
 import Foundation
 import Sparkle
+import SwiftUI
 
 // MARK: - UpdaterService
 
@@ -37,6 +38,18 @@ final class UpdaterService {
     /// Whether a manual update check can be started right now.
     private(set) var canCheckForUpdates = false
 
+    /// Whether Sparkle checks for updates automatically in the background.
+    ///
+    /// Stored here (rather than computed from Sparkle) so SwiftUI's
+    /// Observation tracking sees changes and toggles bound to it re-render;
+    /// writes are forwarded to Sparkle, which persists the choice in
+    /// UserDefaults (`SUEnableAutomaticChecks`).
+    var automaticallyChecksForUpdates: Bool {
+        didSet {
+            updaterController.updater.automaticallyChecksForUpdates = automaticallyChecksForUpdates
+        }
+    }
+
     /// The underlying Sparkle updater controller.
     private let updaterController: SPUStandardUpdaterController
 
@@ -53,6 +66,8 @@ final class UpdaterService {
             userDriverDelegate: nil
         )
 
+        automaticallyChecksForUpdates = updaterController.updater.automaticallyChecksForUpdates
+
         canCheckForUpdatesSubscription = updaterController.updater
             .publisher(for: \.canCheckForUpdates)
             .sink { [weak self] value in
@@ -60,17 +75,16 @@ final class UpdaterService {
             }
     }
 
-    // MARK: - Automatic Checks
-
-    /// Whether Sparkle checks for updates automatically in the background.
-    ///
-    /// Persisted by Sparkle itself in UserDefaults (`SUEnableAutomaticChecks`).
-    var automaticallyChecksForUpdates: Bool {
-        get { updaterController.updater.automaticallyChecksForUpdates }
-        set { updaterController.updater.automaticallyChecksForUpdates = newValue }
-    }
-
     // MARK: - Public Methods
+
+    /// Starts the updater.
+    ///
+    /// Sparkle begins its scheduled background checks when the shared
+    /// instance is created; call this once at app launch so update checks
+    /// never depend on the UI lazily touching `shared`.
+    func start() {
+        // Initialization happens in `init` — this exists to force it at launch.
+    }
 
     /// Starts a user-initiated update check.
     ///
@@ -80,5 +94,24 @@ final class UpdaterService {
     func checkForUpdates() {
         NSApp.activate(ignoringOtherApps: true)
         updaterController.checkForUpdates(nil)
+    }
+}
+
+// MARK: - CheckForUpdatesButton
+
+/// A "Check for Updates…" button wired to `UpdaterService`.
+///
+/// A dedicated view (rather than an inline `Button` in a `Commands` builder)
+/// so Observation tracking reliably re-evaluates the disabled state when
+/// `canCheckForUpdates` changes — `Commands` content alone is not
+/// re-invalidated dependably on macOS 14.
+struct CheckForUpdatesButton: View {
+    private let updaterService = UpdaterService.shared
+
+    var body: some View {
+        Button("Check for Updates…") {
+            updaterService.checkForUpdates()
+        }
+        .disabled(!updaterService.canCheckForUpdates)
     }
 }

@@ -47,9 +47,15 @@ jobs:
       - name: Stamp version into build settings
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          # Derive the build number (CFBundleVersion, Sparkle's comparison key)
+          # from the SemVer components so it is monotonic with the version and
+          # reproducible across workflow re-runs — unlike github.run_number,
+          # which would let a re-run of an older tag outrank a newer release.
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          BUILD_NUMBER=$((MAJOR * 1000000 + MINOR * 1000 + PATCH))
           # Config/Base.xcconfig is the single source of truth for the version.
           sed -i '' "s/^MARKETING_VERSION = .*/MARKETING_VERSION = $VERSION/" Config/Base.xcconfig
-          sed -i '' "s/^CURRENT_PROJECT_VERSION = .*/CURRENT_PROJECT_VERSION = ${{ github.run_number }}/" Config/Base.xcconfig
+          sed -i '' "s/^CURRENT_PROJECT_VERSION = .*/CURRENT_PROJECT_VERSION = $BUILD_NUMBER/" Config/Base.xcconfig
           grep -E '^(MARKETING_VERSION|CURRENT_PROJECT_VERSION)' Config/Base.xcconfig
 
       - name: Resolve Swift package dependencies
@@ -90,7 +96,9 @@ jobs:
             exit 0
           fi
           VERSION="${{ steps.version.outputs.version }}"
-          SPARKLE_VERSION="2.6.4"
+          # Keep in sync with the Sparkle package pin in
+          # Tunnelflare.xcodeproj/project.pbxproj (XCRemoteSwiftPackageReference)
+          SPARKLE_VERSION="2.9.4"
           curl -sSL -o /tmp/sparkle.tar.xz \
             "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
           mkdir -p /tmp/sparkle-tools
@@ -119,6 +127,9 @@ jobs:
           files: |
             ${{ steps.artifact.outputs.path }}
             appcast.xml
+          # appcast.xml is intentionally absent when SPARKLE_PRIVATE_KEY is
+          # unset — don't fail the release over the unmatched pattern.
+          fail_on_unmatched_files: false
           generate_release_notes: true
           draft: false
           prerelease: false
