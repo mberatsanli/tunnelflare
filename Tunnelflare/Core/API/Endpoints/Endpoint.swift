@@ -51,6 +51,21 @@ protocol Endpoint {
     /// The request body, if any.
     var body: Encodable? { get }
 
+    /// Builds a pre-encoded request body, taking precedence over `body`.
+    ///
+    /// Use when the payload must bypass the shared snake_case key strategy,
+    /// e.g. to round-trip API JSON whose keys must be sent back verbatim.
+    /// A thrown error fails the request build instead of silently sending
+    /// a body-less request.
+    func makeRawBody() throws -> Data?
+
+    /// The decoder for this endpoint's response.
+    ///
+    /// Defaults to the shared Cloudflare decoder (snake_case conversion).
+    /// Override with a plain decoder when the response embeds JSON that must
+    /// be captured verbatim (key conversion would mangle unknown keys).
+    var responseDecoder: JSONDecoder { get }
+
     /// Additional headers for this request.
     var headers: [String: String]? { get }
 
@@ -66,6 +81,12 @@ extension Endpoint {
 
     /// Default to no body.
     var body: Encodable? { nil }
+
+    /// Default to no pre-encoded body.
+    func makeRawBody() throws -> Data? { nil }
+
+    /// Default to the shared Cloudflare decoder.
+    var responseDecoder: JSONDecoder { .cloudflareAPI }
 
     /// Default to no additional headers.
     var headers: [String: String]? { nil }
@@ -110,13 +131,16 @@ extension Endpoint {
             request.setValue(value, forHTTPHeaderField: key)
         }
 
-        // Encode body if present
-        if let body = body {
-            do {
+        // Encode body if present (a pre-encoded body takes precedence);
+        // any encoding failure fails the request build
+        do {
+            if let rawBody = try makeRawBody() {
+                request.httpBody = rawBody
+            } else if let body = body {
                 request.httpBody = try JSONEncoder.cloudflareAPI.encode(AnyEncodable(body))
-            } catch {
-                return nil
             }
+        } catch {
+            return nil
         }
 
         return request

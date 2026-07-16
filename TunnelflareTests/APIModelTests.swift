@@ -582,15 +582,16 @@ final class IngressRuleModelTests: XCTestCase {
     // MARK: - Tunnel Configuration Decoding Tests
 
     func testTunnelConfigurationDecoding() throws {
-        let config: TunnelConfiguration = try decode(TunnelConfiguration.self, from: JSONFixtures.tunnelConfiguration)
+        let configuration: TunnelConfiguration = try decode(TunnelConfiguration.self, from: JSONFixtures.tunnelConfiguration)
+        let config = try XCTUnwrap(configuration.config)
 
-        XCTAssertEqual(config.config.ingress.count, 3)
-        XCTAssertEqual(config.source, "cloudflare")
-        XCTAssertEqual(config.version, 1)
-        XCTAssertEqual(config.config.warpRouting?.enabled, true)
+        XCTAssertEqual(config.ingress.count, 3)
+        XCTAssertEqual(configuration.source, "cloudflare")
+        XCTAssertEqual(configuration.version, 1)
+        XCTAssertEqual(config.warpRouting?.enabled, true)
 
         // First rule
-        let firstRule = config.config.ingress[0]
+        let firstRule = config.ingress[0]
         XCTAssertEqual(firstRule.hostname, "app.example.com")
         XCTAssertEqual(firstRule.path, "/api")
         XCTAssertEqual(firstRule.service, "http://localhost:3000")
@@ -598,7 +599,7 @@ final class IngressRuleModelTests: XCTestCase {
         XCTAssertEqual(firstRule.originRequest?.noTLSVerify, false)
 
         // Last rule (catch-all)
-        let catchAll = config.config.ingress.last!
+        let catchAll = config.ingress.last!
         XCTAssertNil(catchAll.hostname)
         XCTAssertEqual(catchAll.service, "http_status:404")
         XCTAssertTrue(catchAll.isCatchAll)

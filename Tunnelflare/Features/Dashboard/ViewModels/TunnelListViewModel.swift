@@ -400,7 +400,7 @@ final class TunnelListViewModel {
 
                         try await TunnelStorageManager.shared.saveConfig(
                             tunnelId: tunnelId,
-                            ingressRules: config.config.ingress
+                            ingressRules: config.config?.ingress ?? []
                         )
                         print("[TunnelList] Saved config for tunnel: \(tunnelName)")
                     } catch {
