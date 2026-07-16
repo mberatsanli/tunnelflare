@@ -152,8 +152,10 @@ enum IngressRuleValidator {
         // No whitespace or scheme fragments allowed
         guard !trimmed.contains(" "), !trimmed.contains("://") else { return false }
 
-        // Each label: alphanumeric + hyphens, not starting/ending with hyphen.
-        // A leading wildcard label ("*") is allowed.
+        // Each label: alphanumeric + hyphens/underscores, not starting/ending
+        // with a hyphen. Underscores are allowed anywhere (Cloudflare accepts
+        // names like "_dmarc.example.com"). A leading wildcard label ("*")
+        // is allowed.
         let labels = trimmed.split(separator: ".", omittingEmptySubsequences: false)
         guard labels.count >= 2 else { return false }
 
@@ -161,7 +163,7 @@ enum IngressRuleValidator {
             if index == 0 && label == "*" { continue }
             guard !label.isEmpty, label.count <= 63 else { return false }
             guard !label.hasPrefix("-"), !label.hasSuffix("-") else { return false }
-            guard label.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) else {
+            guard label.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }) else {
                 return false
             }
         }

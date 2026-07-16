@@ -160,6 +160,8 @@ final class IngressRuleValidatorTests: XCTestCase {
             "a.b.c.example.com",
             "*.example.com",
             "my-app.example.com",
+            "under_score.example.com",  // Cloudflare accepts underscores
+            "_dmarc.example.com",
         ]
 
         for hostname in validHostnames {
@@ -179,7 +181,6 @@ final class IngressRuleValidatorTests: XCTestCase {
             "http://app.example.com",
             "-bad.example.com",
             "bad-.example.com",
-            "under_score.example.com",
         ]
 
         for hostname in invalidHostnames {

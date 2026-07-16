@@ -122,6 +122,14 @@ final class IngressEditorViewModel {
     /// The service port as text (empty for scheme default).
     var formServicePort: String = "8080"
 
+    /// Whether the service is entered as a raw string instead of
+    /// scheme/host/port fields (needed for `http_status:` and `unix:`
+    /// services, which the structured fields can't represent).
+    var formUseRawService: Bool = false
+
+    /// The raw service string (when `formUseRawService` is on).
+    var formRawService: String = ""
+
     /// Whether to create a DNS record for the hostname on save.
     var formCreateDNSRecord: Bool = true
 
@@ -152,8 +160,11 @@ final class IngressEditorViewModel {
     }
 
     /// Whether the draft differs from the last saved state.
+    ///
+    /// Pending DNS records count as unsaved work so a failed DNS creation
+    /// can be retried with another save.
     var isDirty: Bool {
-        fullRules != savedRules
+        fullRules != savedRules || !pendingDNSHostnames.isEmpty
     }
 
     /// Whether the tunnel is locally managed (remote config is ignored).
@@ -179,9 +190,26 @@ final class IngressEditorViewModel {
         return sub.isEmpty ? zone.name : "\(sub).\(zone.name)"
     }
 
+    /// The optional path from the form, normalized with a leading slash.
+    var formNormalizedPath: String {
+        let trimmed = formPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        return trimmed.hasPrefix("/") ? trimmed : "/\(trimmed)"
+    }
+
     /// The full service URL assembled from the form fields.
     var formFullService: String {
-        let host = formServiceHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        if formUseRawService {
+            return formRawService.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // Strip a pasted scheme so "http://localhost:3000" in the host field
+        // doesn't produce "http://http://localhost:3000"
+        var host = formServiceHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let schemeRange = host.range(of: "://") {
+            host = String(host[schemeRange.upperBound...])
+        }
+
         let port = formServicePort.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if port.isEmpty {
@@ -206,8 +234,23 @@ final class IngressEditorViewModel {
 
     // MARK: - Loading
 
-    /// Loads the tunnel configuration from the API.
-    func loadConfiguration() async {
+    /// Whether the configuration has been loaded (successfully) at least once.
+    private var hasLoaded: Bool = false
+
+    /// Loads the tunnel configuration, preferring an already-fetched one.
+    ///
+    /// - Parameter preloaded: A configuration already loaded elsewhere (e.g.
+    ///   by the tunnel detail view model), adopted without a network call.
+    ///
+    /// No-op once loaded, so returning to the tab preserves draft edits.
+    func loadConfiguration(preloaded: TunnelConfiguration? = nil) async {
+        guard !hasLoaded else { return }
+
+        if let preloaded = preloaded {
+            adopt(configuration: preloaded)
+            return
+        }
+
         guard let tunnel = tunnel, !isLoading else { return }
         guard let accountId = appState?.selectedOrganization?.id,
               let apiClient = apiClient else {
@@ -226,19 +269,25 @@ final class IngressEditorViewModel {
                 tunnelId: tunnel.id
             )
 
-            loadedConfig = configuration.config
-            configSource = configuration.source
-
-            let normalized = IngressRuleValidator.normalized(configuration.config.ingress)
-            rules = normalized.filter { !$0.isCatchAll }
-            catchAllRule = normalized.last ?? IngressRuleValidator.defaultCatchAll
-            savedRules = fullRules
-            pendingDNSHostnames = [:]
-            validationIssues = []
-            dnsWarnings = []
+            adopt(configuration: configuration)
         } catch {
             loadError = error.localizedDescription
         }
+    }
+
+    /// Adopts a fetched configuration as the saved baseline.
+    private func adopt(configuration: TunnelConfiguration) {
+        loadedConfig = configuration.config
+        configSource = configuration.source
+
+        let normalized = IngressRuleValidator.normalized(configuration.config.ingress)
+        rules = normalized.filter { !$0.isCatchAll }
+        catchAllRule = normalized.last ?? IngressRuleValidator.defaultCatchAll
+        savedRules = fullRules
+        pendingDNSHostnames = [:]
+        validationIssues = []
+        dnsWarnings = []
+        hasLoaded = true
     }
 
     /// Loads available zones for the hostname picker.
@@ -276,6 +325,8 @@ final class IngressEditorViewModel {
         formServiceType = .http
         formServiceHost = "localhost"
         formServicePort = "8080"
+        formUseRawService = false
+        formRawService = ""
         formCreateDNSRecord = true
         isShowingRuleForm = true
     }
@@ -313,11 +364,16 @@ final class IngressEditorViewModel {
 
         let serviceType = rule.serviceType
         if serviceType == .httpStatus || serviceType == .unix || serviceType == .unknown {
-            // Not representable in scheme/host/port fields; fall back to defaults
+            // Not representable in scheme/host/port fields; edit as raw text
+            // so the service is preserved verbatim
+            formUseRawService = true
+            formRawService = rule.service
             formServiceType = .http
-            formServiceHost = rule.service
+            formServiceHost = "localhost"
             formServicePort = ""
         } else {
+            formUseRawService = false
+            formRawService = ""
             formServiceType = serviceType
             formServiceHost = rule.serviceHost ?? ""
             formServicePort = rule.servicePort.map(String.init) ?? ""
@@ -338,10 +394,8 @@ final class IngressEditorViewModel {
         guard isFormValid else { return }
 
         let hostname = formFullHostname
-        let trimmedPath = formPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        let path: String? = trimmedPath.isEmpty
-            ? nil
-            : (trimmedPath.hasPrefix("/") ? trimmedPath : "/\(trimmedPath)")
+        let normalizedPath = formNormalizedPath
+        let path: String? = normalizedPath.isEmpty ? nil : normalizedPath
 
         // Preserve per-rule origin settings when editing
         let originRequest = editingIndex.flatMap { rules.indices.contains($0) ? rules[$0].originRequest : nil }
@@ -389,12 +443,6 @@ final class IngressEditorViewModel {
             pendingDNSHostnames.removeValue(forKey: hostname)
         }
         rules.remove(at: index)
-        validationIssues = []
-    }
-
-    /// Moves rules between positions (for drag reordering).
-    func moveRules(from source: IndexSet, to destination: Int) {
-        rules.move(fromOffsets: source, toOffset: destination)
         validationIssues = []
     }
 
@@ -461,11 +509,11 @@ final class IngressEditorViewModel {
             )
             configSource = updated.source
 
-            // Create requested DNS records (non-fatal on failure)
+            // Create requested DNS records; failed ones stay pending so
+            // another save retries them
             await createPendingDNSRecords(tunnelId: tunnel.id, apiClient: apiClient)
 
             savedRules = fullRules
-            pendingDNSHostnames = [:]
 
             // Persist locally for quick display
             try? await TunnelStorageManager.shared.saveConfig(
@@ -487,6 +535,9 @@ final class IngressEditorViewModel {
     }
 
     /// Creates or updates DNS records for all pending hostnames.
+    ///
+    /// Successful hostnames are removed from the pending map; failed ones
+    /// remain so a later save retries them.
     private func createPendingDNSRecords(tunnelId: String, apiClient: CloudflareAPIClient) async {
         for (hostname, zone) in pendingDNSHostnames {
             do {
@@ -509,8 +560,10 @@ final class IngressEditorViewModel {
                         tunnelId: tunnelId
                     )
                 }
+
+                pendingDNSHostnames.removeValue(forKey: hostname)
             } catch {
-                dnsWarnings.append("DNS record for \(hostname) failed: \(error.localizedDescription)")
+                dnsWarnings.append("DNS record for \(hostname) failed: \(error.localizedDescription). Save again to retry.")
             }
         }
     }

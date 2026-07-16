@@ -25,12 +25,18 @@ struct IngressEditorView: View {
     /// The tunnel whose ingress rules are edited.
     let tunnel: Tunnel
 
+    /// The editor view model.
+    ///
+    /// Owned by the parent (tunnel detail view) so draft edits survive
+    /// switching tabs, which destroys and recreates this view.
+    let viewModel: IngressEditorViewModel
+
+    /// A configuration already fetched by the parent, adopted on first load
+    /// to avoid a duplicate API call.
+    var preloadedConfiguration: TunnelConfiguration?
+
     /// Called after a successful save with the saved rules.
     var onSaved: (([IngressRule]) -> Void)?
-
-    // MARK: - State
-
-    @State private var viewModel = IngressEditorViewModel()
 
     // MARK: - Body
 
@@ -51,7 +57,7 @@ struct IngressEditorView: View {
             viewModel.onSaved = onSaved
         }
         .task {
-            await viewModel.loadConfiguration()
+            await viewModel.loadConfiguration(preloaded: preloadedConfiguration)
             await viewModel.loadZones()
         }
         .sheet(isPresented: $viewModel.isShowingRuleForm) {
@@ -527,7 +533,7 @@ struct IngressRuleFormView: View {
 
             if !viewModel.formFullHostname.isEmpty {
                 LabeledContent("Hostname") {
-                    Text(viewModel.formFullHostname + viewModel.formPath)
+                    Text(viewModel.formFullHostname + viewModel.formNormalizedPath)
                         .font(.system(.body, design: .monospaced))
                         .foregroundStyle(.secondary)
                 }
@@ -539,17 +545,24 @@ struct IngressRuleFormView: View {
 
     private var serviceSection: some View {
         Section("Service") {
-            Picker("Type", selection: $viewModel.formServiceType) {
-                ForEach([ServiceType.http, .https, .tcp, .ssh, .rdp], id: \.self) { type in
-                    Text(type.rawValue).tag(type)
+            Toggle("Enter service manually", isOn: $viewModel.formUseRawService)
+
+            if viewModel.formUseRawService {
+                TextField("Service", text: $viewModel.formRawService, prompt: Text("http_status:404 or unix:/path.sock"))
+                    .textFieldStyle(.roundedBorder)
+            } else {
+                Picker("Type", selection: $viewModel.formServiceType) {
+                    ForEach([ServiceType.http, .https, .tcp, .ssh, .rdp], id: \.self) { type in
+                        Text(type.rawValue).tag(type)
+                    }
                 }
+
+                TextField("Host", text: $viewModel.formServiceHost, prompt: Text("localhost"))
+                    .textFieldStyle(.roundedBorder)
+
+                TextField("Port", text: $viewModel.formServicePort, prompt: Text("8080"))
+                    .textFieldStyle(.roundedBorder)
             }
-
-            TextField("Host", text: $viewModel.formServiceHost, prompt: Text("localhost"))
-                .textFieldStyle(.roundedBorder)
-
-            TextField("Port", text: $viewModel.formServicePort, prompt: Text("8080"))
-                .textFieldStyle(.roundedBorder)
 
             LabeledContent("Service URL") {
                 Text(viewModel.formFullService)
@@ -591,7 +604,7 @@ struct IngressRuleFormView: View {
     let appState = AppState()
     appState.isAuthenticated = true
 
-    return IngressEditorView(tunnel: .preview)
+    return IngressEditorView(tunnel: .preview, viewModel: IngressEditorViewModel())
         .environment(appState)
         .frame(width: 800, height: 600)
 }

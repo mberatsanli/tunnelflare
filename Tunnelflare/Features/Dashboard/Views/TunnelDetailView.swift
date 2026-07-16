@@ -36,6 +36,9 @@ struct TunnelDetailView: View {
 
     @State private var viewModel = TunnelDetailViewModel()
 
+    /// Owned here (not by the ingress tab) so draft edits survive tab switches.
+    @State private var ingressEditorViewModel = IngressEditorViewModel()
+
     // MARK: - Body
 
     var body: some View {
@@ -406,7 +409,11 @@ struct TunnelDetailView: View {
     // MARK: - Ingress Rules Tab
 
     private var ingressRulesTab: some View {
-        IngressEditorView(tunnel: tunnel) { savedRules in
+        IngressEditorView(
+            tunnel: tunnel,
+            viewModel: ingressEditorViewModel,
+            preloadedConfiguration: viewModel.configuration
+        ) { savedRules in
             viewModel.applySavedIngressRules(savedRules)
         }
     }
