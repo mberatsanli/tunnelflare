@@ -136,9 +136,18 @@ struct LoginView: View {
                 tokenCard
                     .padding(.top, 12)
             } label: {
-                Text("Or use an API token")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                // On macOS only the chevron toggles a DisclosureGroup; make the
+                // label text toggle it too so the whole row is clickable.
+                Button {
+                    withAnimation { showTokenLogin.toggle() }
+                } label: {
+                    Text("Or use an API token")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(32)

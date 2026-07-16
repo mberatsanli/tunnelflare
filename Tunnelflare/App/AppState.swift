@@ -129,6 +129,10 @@ final class AppState {
     /// Whether the new tunnel wizard is being shown.
     var isShowingNewTunnelWizard: Bool = false
 
+    /// Local service address (e.g. "localhost:5173") to prefill in the new
+    /// tunnel wizard, set when creating a tunnel from a detected local service.
+    var pendingWizardServiceURL: String?
+
     /// Current search text in the tunnel list.
     var tunnelSearchText: String = ""
 
@@ -151,6 +155,13 @@ final class AppState {
     /// Service container holding process management services.
     /// This is set after initialization when services are ready.
     var serviceContainer: ServiceContainer?
+
+    /// Shared view model for the Local Services list.
+    ///
+    /// A single instance is shared between the dashboard page and the menu
+    /// bar section so both surfaces show the same scan results and only one
+    /// scan runs at a time.
+    let localServicesViewModel = LocalServicesViewModel()
 
     // MARK: - Initialization
 

@@ -38,6 +38,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Configure the app's activation policy based on settings
         updateActivationPolicy()
 
+        // Start the Sparkle updater so scheduled background update checks
+        // run regardless of which UI touches UpdaterService first
+        UpdaterService.shared.start()
+
         // Log system information
         logSystemInfo()
 
